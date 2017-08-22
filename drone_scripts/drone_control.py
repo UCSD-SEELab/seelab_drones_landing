@@ -13,10 +13,7 @@ Pilot:
 Navigator:
     Class to handle the high-level navigation and mission execution.
 """
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from models import *
+
 import dronekit
 from dronekit import VehicleMode
 import copy
@@ -30,14 +27,11 @@ import json
 import tempfile
 import socket
 import Queue
-import cPickle
 import numpy
 import time
 import sys
 import hardware
-import rf_readings
-import sdr_readings
-import csv
+import logging
 from pubsub import pub
 from flask import Flask, request
 from contextlib import contextmanager
@@ -50,7 +44,7 @@ class FlaskServer(threading.Thread):
     """Provide a flask server for managing HTTP requests to/from the drone.
 
     This class is set up using the Flask documentation. It inherits from the
-    threading.Thread class, and therfore needs a run() method and to specificy
+    threading.Thread class, and therfore needs a run() method and to specify
     self.daemon. 
 
     This class communicates with the other objects on the drone via the
@@ -64,6 +58,7 @@ class FlaskServer(threading.Thread):
         self.daemon = True
         self.start()
 
+
     @app.route('/launch', methods=['POST'])
     def launch_func():
         """Post the current time and a launch command to the launch topic."""
@@ -74,6 +69,7 @@ class FlaskServer(threading.Thread):
             arg1=time,
         )
         return 'received launch command'
+
 
     @app.route('/mission', methods=['POST'])
     def mission_func():
@@ -87,6 +83,7 @@ class FlaskServer(threading.Thread):
         )
         return 'received mission'
 
+
     @app.route('/RTL_and_land', methods=['GET'])
     def RTL_and_land_func():
         """Publish True to the RTL topic."""
@@ -96,6 +93,7 @@ class FlaskServer(threading.Thread):
             arg1=True,
         )
         return 'RTL and landing'
+
 
     @app.route('/land', methods=['GET'])
     def land_func():
@@ -107,15 +105,18 @@ class FlaskServer(threading.Thread):
         )
         return 'landing'
 
+
     @app.route('/ack', methods=['GET'])
     def ack_func():
         """Send an acknowledgement to whoever sent the request."""
         print "entered flask ack function"
         return 'ack'
 
+
     def run(self):
         """Start the flask server on the local ip and then start the thread."""
         app.run('0.0.0.0')
+
 
 class LoggerDaemon(threading.Thread):
     """Provide a class to receive logging data and store it in the database.
@@ -145,15 +146,15 @@ class LoggerDaemon(threading.Thread):
         config_file -- configuration file to get the current mission_name and
                        drone info from.
         """
+        
         super(LoggerDaemon, self).__init__()
         self._pilot = pilot
         self.daemon = True
-        self.establish_database_connection()
         self._start_seconds = None
         self.read_config(config_file, drone_name)
-        self.acquire_sensor_records()
         self.setup_subs()
         self.start()
+
 
     def read_config(self, filename, drone_name):
         """Read the mission config file and store mission and drone information
@@ -162,6 +163,7 @@ class LoggerDaemon(threading.Thread):
         current mission and drone, in preparation for finding their records in
         the database.
         """
+        
         #TODO: this is bad
         with open(filename) as fp:
             config = json.load(fp)
@@ -169,6 +171,7 @@ class LoggerDaemon(threading.Thread):
             if drone['name'] == drone_name:
                 self.drone_info = drone
         self.drone_info['mission'] = config['mission_name']
+
 
     def mission_time(self):
         """Return the current time in unix era format.
@@ -191,51 +194,13 @@ class LoggerDaemon(threading.Thread):
         else:
             return None
 
-    def establish_database_connection(self):
-        """Set up the database access via the sqlalchemy interface."""
-        # TODO: set up the URL somehow so it's not here and also in the
-        # startup thing in /etc/rc.local. How do I into networking anyway?
-        db_name = 'mission_data'
-        # 192.168.42.19 is the address the basestation should always be on,
-        # on the ZyXEL network
-        '''
-        import machine_config
-        if machine == 'laptop':
-        '''
-        machine = 'drone'
-        if machine == 'laptop':
-            db_url = 'mysql+mysqldb://%s:%s@localhost/%s' % (local_user, local_password, db_name)
-        elif machine == 'drone':
-            print("Establish connection to laptop MySQL server at %s" % db_ip_addr)
-            db_url = 'mysql+mysqldb://%s:%s@%s/%s' % (local_user, local_password, db_ip_addr, db_name)
-			# db_url = 'mysql+mysqldb://%s:%s@192.168.1.36/%s' % (local_user, local_password, db_name)
-        else:
-            print ("machine not recognized, attempting to connect to database"+
-                  " locally (this will probably error)...")
-            db_url = 'mysql+mysqldb://%s:%s@localhost/%s' % (local_user, local_password, db_name)
-        self.engine = create_engine(db_url)
-        self.Session = sessionmaker(bind=self.engine)
-
-    @contextmanager
-    def scoped_session(self):
-        """Provide a context manager for database access."""
-        session = self.Session()
-        try:
-            yield session
-            session.commit()
-        except:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def setup_subs(self):
         """Set up the subscribers and callbacks for relevant pubsub topics."""
-        pub.subscribe(self.air_data_cb, "sensor-messages.air-data")
-        pub.subscribe(self.wifi_data_cb, "sensor-messages.wifi-data")
-        pub.subscribe(self.sdr_data_cb, "sensor-messages.sdr-data")
+        pub.subscribe(self.landingcam_data_cb, "sensor-messages.landingcam-data")
         pub.subscribe(self.mission_data_cb, "nav-messages.mission-data")
         pub.subscribe(self.launch_cb, "flask-messages.launch")
+
 
     def launch_cb(self, arg1=None):
         """Set start_seconds and launch_time to appropriate values."""
@@ -245,150 +210,34 @@ class LoggerDaemon(threading.Thread):
             self._launch_time = time_dict['start_time']
             print "LoggerDaemon got {0}, {1} from launch".format(arg1, self._launch_time)
 
-    def acquire_sensor_records(self):
-        """Find sensor records for this drone and mission.
-
-        This queries the database for all sensor records that are in this drone
-        and mission, and then sorts them into the air, GPS and RF sensors
-        accordingly based on their names.
-        """
-        print "ACQUIRING RECORDS"
-        #This whole function is sort of screwy
-        #TODO: implement a better method of associating sensors with a drone
-        # that supports multiple air sensors being logged
-        with self.scoped_session() as session:
-            mission_drone_sensors = session.query(
-                MissionDroneSensor,
-            ).join(
-                MissionDrone,
-                Drone,
-                Mission,
-                Sensor,
-            ).filter(
-                Drone.name==self.drone_info['name'],
-                Mission.name==self.drone_info['mission'],
-                Sensor.name.in_(self.drone_info['sensors'])
-            ).all()
-            print mission_drone_sensors,
-            print self.drone_info
-            # look it's the screwy part
-            for mds in mission_drone_sensors:
-                if 'air' in mds.sensor.name:
-                    self.air_sensor = mds
-                elif 'GPS' in mds.sensor.name:
-                    self.GPS_sensor = mds
-                elif 'RF' in mds.sensor.name:
-                    self.RF_sensor = mds
-                elif 'SDR' in mds.sensor.name:
-                    self.SDR_sensor = mds
 
     def mission_data_cb(self, arg1=None):
-        """Add incoming mission event to the database."""
+        """Add incoming mission event to log."""
         print 'entered mission_data_cb'
         event_dict = copy.deepcopy(arg1)
         event_json = event_dict
-        with self.scoped_session() as session:
-            mission_event = session.query(
-                EventType,
-            ).filter(
-                EventType.event_type == 'mission_event',
-            ).one()
-            new_event = Event(
-                    event_type=mission_event,
-                    event_data=event_json,
-            )
-            session.add(new_event)
+        # TODO Add logging to file 
+
 
     def wifi_data_cb(self, arg1=None):
-        """Add incoming wifi data to the database."""
+        """Add incoming wifi data to log."""
         #print "wifi callback entered: {}".format(arg1)
         current_time = self.mission_time()
         if current_time is not None:
             print 'entered wifi_data_cb'
             data = copy.deepcopy(arg1)
-            with self.scoped_session() as session:
-                merged_sensor = session.merge(self.RF_sensor)
-                RF_event = session.query(
-                    EventType,
-                ).filter(
-                    EventType.event_type == 'RF_sensor_data',
-                ).one()
-                assoc_event = Event(
-                        event_type=RF_event,
-                        event_data = {},
-                )
-                reading = RFSensorRead(
-                        RF_data=data,
-                        mission_drone_sensor=merged_sensor,
-                        event=assoc_event,
-                        time=current_time,
-                )
-                session.add_all([reading, assoc_event])
+        # TODO Add logging to file 
     
-    ### Won't work until database is configured properly
-    def sdr_data_cb(self, arg1=None):
-        """Add incoming SDR data to the database."""
-        current_time = self.mission_time()
-        current_velocity=self._pilot.get_velocity()
-        if current_time is not None:
-            print 'entered sdr_data_cb'
-            location_global = self._pilot.get_global_location()
-            if (location_global
-                    and location_global.lat
-                    and location_global.lon
-                    and location_global.alt
-                    and current_time):
-                location_local = self.rel_from_glob(location_global)
-                location_local.insert(0, 'local')
-                current_velocity.insert(0, ['local', location_local])
-            else:
-                current_velocity.append(['no global', 'no local'])
-            data = copy.deepcopy(arg1)
-            with self.scoped_session() as session:
-                merged_sensor = session.merge(self.SDR_sensor)
-                SDR_event = session.query(
-                    EventType,
-                ).filter(
-                    EventType.event_type == 'SDR_sensor_data',
-                ).one()
-                assoc_event = Event(
-                        event_type = SDR_event,
-                        event_data = {},
-                )
-                reading = SDRSensorRead(
-                        SDR_data=data,
-                        mission_drone_sensor=merged_sensor,
-                        event=assoc_event,
-                        time=current_time,
-                        velocity=current_velocity
-                )
-                session.add_all([reading, assoc_event])
-
-    def air_data_cb(self, arg1=None):
-        """Add incoming air sensor data to the database."""
+    
+    def landingcam_data_cb(self, arg1=None):
+        """Add incoming landing camera data to log."""
         current_time = self.mission_time()
         if current_time is not None:
-            print 'entered air_data_cb'
+            print 'entered landingcam_data_cb'
             print arg1
             data = copy.deepcopy(arg1)
-            with self.scoped_session() as session:
-                merged_sensor = session.merge(self.air_sensor)
-                air_event = session.query(
-                    EventType,
-                ).filter(
-                    EventType.event_type == 'air_sensor_data',
-                ).one()
-                assoc_event = Event(
-                        event_type=air_event,
-                        event_data = {}
-                )
-                reading = AirSensorRead(
-                        air_data=data,
-                        mission_drone_sensor=merged_sensor,
-                        event=assoc_event,
-                        time=current_time
-                )
-                session.add_all([reading, assoc_event])
+            # TODO Add logging to file
+
 
     def rel_from_glob(self, global_loc):
         """Return the relative coordinates of a GPS location in JSON NE format.
@@ -413,8 +262,9 @@ class LoggerDaemon(threading.Thread):
         )
         return json.dumps({'relative':[north, east]})
 
+
     def GPS_recorder(self):
-        """Record the drone's current GPS location every half second."""
+        """Record the drone's current GPS location every second."""
         # Something better than while True? Thread is already a daemon I guess
         #TODO: I found a bug where if the home gps coordinates get messed up
         # data won't be logged. Maybe add some safety when calling
@@ -428,28 +278,9 @@ class LoggerDaemon(threading.Thread):
                     and location_global.alt
                     and current_time):
                 location_relative = self.rel_from_glob(location_global)
-                with self.scoped_session() as session:
-                    merged_sensor = session.merge(self.GPS_sensor)
-                    gps_event = session.query(
-                        EventType,
-                    ).filter(
-                        EventType.event_type == 'auto_nav',
-                    ).one()
-                    assoc_event = Event(
-                            event_type=gps_event,
-                            event_data = {}
-                    )
-                    reading = GPSSensorRead(
-                            time=current_time,
-                            mission_drone_sensor=merged_sensor,
-                            event = assoc_event,
-                            latitude=location_global.lat,
-                            longitude=location_global.lon,
-                            altitude=location_global.alt,
-                            relative=location_relative,
-                    )
-                    session.add_all([reading, gps_event])
+                # TODO Add logging to file
             time.sleep(1)
+
 
     def run(self):
         """Start the thread object."""
@@ -476,17 +307,18 @@ class Pilot(object):
     sim_speedup = 1
     instance = -1
 
-    def __init__(self, simulated=False, simulated_RF_sensor=False, simulated_air_sensor=False, sim_speedup=None):
+
+    def __init__(self, simulated=False, simulated_landing_camera=False, sim_speedup=None):
         """Construct an instance of the Pilot class.
 
         This instantiates the sensors, real or simulated, and the LoggerDaemon.
 
         simulated -- Are we running this on the simulator?
-        simulated_RF_sensor -- Use simulated data if True, real RF data else
-        simulated_air_sensor -- Use simulated data if True, real air data else
+        simulated_pi_camera -- Is a camera attached or being simulated?
         sim_speedup -- Factor to speed up the simulator, e.g. 2.0 = twice as
                        fast. Somewhat glitchy on higher values.
         """
+        
         Pilot.instance += 1
         self.instance = Pilot.instance
         print "I'm a pilot, instance number {0}".format(self.instance)
@@ -501,12 +333,10 @@ class Pilot(object):
 
         self.vehicle = None
         self.sitl = None
-        hardware.AirSensor(simulated=simulated_air_sensor)
-        rf_readings.RSSISensor(simulated=simulated_RF_sensor)
-        # Test out adding SDR
-        sdr_readings.rxSDR()
+        hardware.LandingCamera(simulated=simulated_landing_camera)
 
         LoggerDaemon(self, "Beta")
+
 
     def bringup_drone(self, connection_string=None):
         """Connect to a dronekit vehicle or instantiate an sitl simulator.
@@ -515,7 +345,7 @@ class Pilot(object):
         
         This is some deep magic related to running multiple drones at once. We
         don't technically need it, since the network architecture I've set up
-        has the drones all be independant (if you want to simulate multiple
+        has the drones all be independent (if you want to simulate multiple
         drones with the current setup you run multiple instances of the SITL
         simulator). Chris got this all working by talking with the dronekit
         devs, so he knows a lot more about it than I do.
@@ -524,6 +354,7 @@ class Pilot(object):
                              ArduPilot). Provide None and it'll start its own
                              simulator.
         """
+        
         if not connection_string:
             # Start SITL if no connection string specified
             print "Starting SITL"
@@ -566,9 +397,11 @@ class Pilot(object):
             self.vehicle = dronekit.connect(connection_string, wait_ready=True)
             print "Success {0}".format(connection_string)
 
+
     def stop(self):
         """Properly close the vehicle object."""
         self.shutdown_vehicle()
+
 
     def arm_and_takeoff(self, target_alt):
         """Arm vehicle and fly to target_alt."""
@@ -621,9 +454,11 @@ class Pilot(object):
                 break
             time.sleep(1.0 / Pilot.sim_speedup)
 
+
     def poll(self):
         """Return string with the vehicle's current location (local frame)."""
         return "Location: " + str(self.vehicle.location.local_frame)
+
 
     def get_local_location(self):
         """Return the vehicle's NED location as a LocationGlobalRelative."""
@@ -633,10 +468,12 @@ class Pilot(object):
                 return self.vehicle.location.local_frame
         return None
 
+
     def get_attitude(self):
         """Return the current attitude."""
         if self.vehicle is not None:
             return self.vehicle.attitude
+
 
     def get_velocity(self):
         """Return the current velocity."""
@@ -646,6 +483,7 @@ class Pilot(object):
                 return self.vehicle.velocity
         return None
 
+
     def get_global_location(self):
         """Return the vehicle's current GPS location as a LocationGlobal."""
         if self.vehicle is not None and self.vehicle.location is not None:
@@ -653,6 +491,7 @@ class Pilot(object):
             if loc.lat is not None and loc.lon is not None:
                 return self.vehicle.location.global_frame
         return None
+
 
     def goto_relative(self, north, east, altitude_relative):
         """Go to a NED location.
@@ -665,6 +504,7 @@ class Pilot(object):
                                       east,
                                       altitude_relative)
         self.goto_waypoint(location)
+
 
     def goto_waypoint(self, global_relative, ground_tol=0.8, alt_tol=1.0, speed=50):
         """Go to a waypoint and block until we get there.
@@ -697,6 +537,7 @@ class Pilot(object):
         print "Arrived at global_relative."
         return True
 
+
     def RTL_and_land(self):
         """Return to home location and land the drone."""
         print "Vehicle {0} returning to home location".format(self.instance)
@@ -704,15 +545,19 @@ class Pilot(object):
         print "Vehicle {0} landing".format(self.instance)
         self.vehicle.mode = VehicleMode("LAND")
 
+
     def land_drone(self):
         """Land the drone at its current location."""
+        
         print "Vehicle {0} landing".format(self.instance)
         self.vehicle.mode = VehicleMode("LAND")
+
 
     def return_to_launch(self):
         """Return to the home location."""
         print "Vehicle {0} returning to home location".format(self.instance)
         self.goto_relative(0, 0, 15)
+
 
     def shutdown_vehicle(self):
         """Properly close the vehicle object."""
@@ -729,20 +574,19 @@ class Navigator(object):
 
     """
 
-    def __init__(self, simulated=False, simulated_RF_sensor=True, simulated_air_sensor=True, takeoff_alt=5):
+    def __init__(self, simulated=False, simulated_landing_camera=False, takeoff_alt=5):
         """Construct an instance of the Navigator class.
 
         simulated -- Are we running this on the simulator?
-        simulated_RF_sensor -- Use simulated data if True, real RF data else
-        simulated_air_sensor -- Use simulated data if True, real air data else
+        simulated_landing_camera -- Use simulated data if True, real landing data else
         takeoff_alt -- the height the drone should launch to in meters
         """
+        
         print "I'm a Navigator!"
         self._waypoint_index = 0
         self.takeoff_alt = takeoff_alt
         self.simulated = simulated
-        self.simulated_air_sensor = simulated_air_sensor
-        self.simulated_RF_sensor = simulated_RF_sensor
+        self.simulated_landing_camera = simulated_landing_camera
         self.bringup_ip = None
         #should this be in the init function or part of the interface?
         #also should there be error handling?
@@ -753,11 +597,13 @@ class Navigator(object):
         self.mission_queue = deque([])
         self.event_loop()
 
+
     def load_launch_mission(self):
         """Load a mission for launching the drone."""
         with open('launch_mission.json', 'r') as fp:
             mission = json.load(fp)
         return mission
+
 
     def event_loop(self):
         """Maintain a queue for missions and execute them as they come in."""
@@ -770,9 +616,11 @@ class Navigator(object):
                     self.execute_mission(next_mission)
                     if self.pilot.vehicle.mode != 'GUIDED':
                         self.mission_queue = deque([])
+                        
             except KeyboardInterrupt:
                 self.pilot.RTL_and_land()
                 break
+
 
     def setup_subs(self):
         """Set up the PyPubSub subscribers to communicate with FlaskServer."""
@@ -782,11 +630,13 @@ class Navigator(object):
         pub.subscribe(self.land_cb, "flask-messages.land")
         pub.subscribe(self.RTL_cb, "flask-messages.RTL")
 
+
     def mission_cb(self, arg1=None):
         """Add an incoming mission to the mission queue."""
         print "Navigator entered mission_cb"
         mission_dict = arg1
         self.mission_queue.append(mission_dict)
+
 
     def launch_cb(self, arg1=None):
         """Launch the drone when a message is recieved on the launch topic."""
@@ -795,10 +645,12 @@ class Navigator(object):
         self.mission_queue.append(launch_mission)
         #self.liftoff(5)
 
+
     def land_cb(self, arg1=None):
         """Tell the pilot to land the drone."""
         print "Navigator entered land callback"
         self.pilot.land_drone()
+
 
     def RTL_cb(self, arg1=None):
         """Tell the pilot to RTL and land."""
@@ -806,9 +658,11 @@ class Navigator(object):
         self.pilot.return_to_launch()
         self.pilot.land_drone()
 
+
     def stop(self):
         """Shut down the pilot/vehicle."""
         self.pilot.stop()
+
 
     def instantiate_pilot(self):
         """Instantiate a pilot object and store it."""
@@ -823,6 +677,7 @@ class Navigator(object):
         print(self.bringup_ip)
         self.pilot.bringup_drone(connection_string=self.bringup_ip)
 
+
     def launch(self, event):
         """Tell the pilot to arm the drone and take off."""
         #altitude should be in meters
@@ -833,11 +688,13 @@ class Navigator(object):
             return
         print "Vehicle {0} already armed".format(self.pilot.instance)
 
+
     def parse_mission(self, mission_dict):
         """Add GPS coordinates to all the points in a mission dictionary."""
         for name, POI in mission_dict["points"].iteritems():
             POI["GPS"] = self.meters_to_waypoint(POI)
         return mission_dict
+
 
     def meters_to_waypoint(self, POI):
         """Construct a GPS location from a NED point.
@@ -853,12 +710,14 @@ class Navigator(object):
         )
         return global_rel
 
+
     def execute_mission(self, unparsed_mission):
         """Execute an un-parsed mission and send logging data to the logger.
 
         unparsed_mission -- a mission in the form of a dictionary, for example
                             from the FlaskServer.
         """
+        
         try:
             if unparsed_mission['plan'][0]['action'] != 'launch':
                 mission = self.parse_mission(unparsed_mission)
@@ -866,12 +725,15 @@ class Navigator(object):
                 # look at the terrible thing I'm doing! :D
                 # ... D:
                 mission = unparsed_mission
+                
             self.current_mission = mission
+            
             for event in mission["plan"]:
                if mission['plan'][0]['action'] != 'launch' and (self.pilot.vehicle.mode != 'GUIDED'):
 	           print 'aborting mission due to check'
                    self.mission_queue = deque([])
                    return
+                   
 	       print 'mission executing action {}'.format(event['action'])
                action = getattr(self, event['action'])
                #publish event start
@@ -899,6 +761,7 @@ class Navigator(object):
             self.pilot.RTL_and_land()
             self.stop()
 
+
     def go(self, event):
         """Execute a Go action with a mission event."""
         name = event['points'][0]
@@ -906,6 +769,7 @@ class Navigator(object):
         global_rel = point["GPS"]
         print "Moving to {}".format(name)
         self.pilot.goto_waypoint(global_rel, speed=70)
+
 
     def patrol(self, event):
         """Execute a Patrol action with a mission event."""
@@ -918,12 +782,14 @@ class Navigator(object):
                 self.pilot.goto_waypoint(point['GPS'], speed=10)
         print "Finished patrolling"
 
+
     def RTL(self, event):
         """Execute an RTL action with a mission event.
 
         Not currently used.
         """
         self.pilot.return_to_launch()
+
 
     def land(self, event):
         """Execute a Land action with a mission event.

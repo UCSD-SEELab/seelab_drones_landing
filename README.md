@@ -1,4 +1,4 @@
-# The Drone Project
+# The Drone Project (readme to be updated soon)
 
 ![Watching multiple drones with APM planner](https://github.com/sciencectn/drone_python/raw/master/screenshots/top_gun.png)
 _Watching multiple simulated drones with APM planner_
