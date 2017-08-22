@@ -47,10 +47,10 @@ class LandingCamera(threading.Thread):
 
     def run(self):
         pic = self._take_pic()
-        results, retval = self._find_target(pic)
-        if retval is True:
+        results = self._find_target(pic)
+        if results['found'] is True:
             ("Target found")
-            self.callback(results)
+            self._callback(results)
         else:
             print ("Target not found")
 
@@ -99,14 +99,15 @@ class LandingCamera(threading.Thread):
             else:
                 z = 12632 * (area ** -0.502)
 
-            data = {'xoffset': x, 'yoffset': y, 'distance': z}
-            return data, True
+            data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found': True}
+            return data
 
         else:
             print("Corners not found, picture saved")
             path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", gmtime()) + '.jpg'
             cv2.imwrite(path, vid)
-            return 0, False
+            data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found':False}
+            return data
 
 class AirSensor(threading.Thread):
     """Provide an interface to Christine/Michael's air sensor.
