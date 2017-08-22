@@ -19,7 +19,7 @@ from dronekit import VehicleMode, LocationGlobalRelative
 import copy
 from code import interact
 import dronekit_sitl
-from nav_utils import relative_to_global, get_ground_distance 
+from nav_utils import relative_to_global, get_ground_distance
 import nav_utils
 import threading
 import random
@@ -45,7 +45,7 @@ class FlaskServer(threading.Thread):
 
     This class is set up using the Flask documentation. It inherits from the
     threading.Thread class, and therfore needs a run() method and to specify
-    self.daemon. 
+    self.daemon.
 
     This class communicates with the other objects on the drone via the
     PyPubSub API.
@@ -124,7 +124,7 @@ class LoggerDaemon(threading.Thread):
     LoggerDaemon is the central class for all the logging and data storage that
     the drones need. It can read data from and store data in the database,
     keeps track of the current time, and receives data from the navigator and
-    sensors via the PyPubSub API. 
+    sensors via the PyPubSub API.
 
     This class inherets from threading.Thread and is a daemon.
 
@@ -133,7 +133,7 @@ class LoggerDaemon(threading.Thread):
     # TODO: put mission_setup in sane place and fix path
     def __init__(self, pilot, drone_name, config_file='../database_files/mission_setup.json'):
         """Construct an instance of LoggerDaemon.
-        
+
         This stores the Pilot object that created the LoggerDaemon, sets the
         object as a daemon, sets up the database connection and then finds the
         database records associated with the drone and sensor(s) it's running
@@ -146,7 +146,7 @@ class LoggerDaemon(threading.Thread):
         config_file -- configuration file to get the current mission_name and
                        drone info from.
         """
-        
+
         super(LoggerDaemon, self).__init__()
         self._pilot = pilot
         self.daemon = True
@@ -156,13 +156,13 @@ class LoggerDaemon(threading.Thread):
         self.setup_subs()
         self.start()
 
-                            
+
     def setup_logging(self):
-        filename = time.strftime('Log_' + self.drone_info['name'] + '_' + 
-                                 self.drone_info['mission'] + '_%Y%m%d_%H%M%S.log', 
+        filename = time.strftime('Log_' + self.drone_info['name'] + '_' +
+                                 self.drone_info['mission'] + '_%Y%m%d_%H%M%S.log',
                                  time.localtime())
-        logging.basicConfig(filename='Logs/' + filename, level=logging.DEBUG, 
-                            format='%(asctime)s: %(message)s', 
+        logging.basicConfig(filename='Logs/' + filename, level=logging.DEBUG,
+                            format='%(asctime)s: %(message)s',
                             datefmt='%Y%m%d %H%M%S')
 
 
@@ -173,7 +173,7 @@ class LoggerDaemon(threading.Thread):
         current mission and drone, in preparation for finding their records in
         the database.
         """
-        
+
         #TODO: this is bad
         with open(filename) as fp:
             config = json.load(fp)
@@ -226,7 +226,7 @@ class LoggerDaemon(threading.Thread):
         print 'entered mission_data_cb'
         event_dict = copy.deepcopy(arg1)
         event_json = event_dict
-        # TODO Add logging to file 
+        # TODO Add logging to file
 
 
     def wifi_data_cb(self, arg1=None):
@@ -236,9 +236,9 @@ class LoggerDaemon(threading.Thread):
         if current_time is not None:
             print 'entered wifi_data_cb'
             data = copy.deepcopy(arg1)
-        # TODO Add logging to file 
-    
-    
+        # TODO Add logging to file
+
+
     def landingcam_data_cb(self, arg1=None):
         """Add incoming landing camera data to log."""
         current_time = self.mission_time()
@@ -251,7 +251,7 @@ class LoggerDaemon(threading.Thread):
 
     def rel_from_glob(self, global_loc):
         """Return the relative coordinates of a GPS location in JSON NE format.
-        
+
         global_loc should be a location object from dronekit that has a lat and
         a lon attribute. The returned value is a JSON string of a dictionary so
         that it can be put directly into the relative attribute of a GPS sensor
@@ -304,13 +304,13 @@ class Pilot(object):
     drone from place to place, interfacing with sensors, and accessing/updating
     the information in dronekit's vehicle object (which in turn is the API used
     to interact with the instance of ardupilot running on the drone).
-    
+
     Chris originally wrote most of this class, so if my documentation is
     unclear or lacking he might be able to provide clarification. A lot of the
     code in this class is probably superflous by this point (for example, I'm
     pretty sure self.hold_altitude does nothing) but it works, and refactoring
     hasn't been high on the list of priorities, so if you're going to dig into
-    this class be aware it might be confusing. 
+    this class be aware it might be confusing.
 
     """
 
@@ -328,7 +328,7 @@ class Pilot(object):
         sim_speedup -- Factor to speed up the simulator, e.g. 2.0 = twice as
                        fast. Somewhat glitchy on higher values.
         """
-        
+
         Pilot.instance += 1
         self.instance = Pilot.instance
         print "I'm a pilot, instance number {0}".format(self.instance)
@@ -352,7 +352,7 @@ class Pilot(object):
         """Connect to a dronekit vehicle or instantiate an sitl simulator.
 
         Call this once everything is set up and you're ready to fly.
-        
+
         This is some deep magic related to running multiple drones at once. We
         don't technically need it, since the network architecture I've set up
         has the drones all be independent (if you want to simulate multiple
@@ -364,7 +364,7 @@ class Pilot(object):
                              ArduPilot). Provide None and it'll start its own
                              simulator.
         """
-        
+
         if not connection_string:
             # Start SITL if no connection string specified
             print "Starting SITL"
@@ -557,7 +557,7 @@ class Pilot(object):
 
 
     def land_drone(self):
-        """Land the drone at its current location."""    
+        """Land the drone at its current location."""
         print "Vehicle {0} landing".format(self.instance)
         self.vehicle.mode = VehicleMode("LAND")
 
@@ -579,7 +579,7 @@ class Navigator(object):
 
     This class is the compliment to the Pilot class. It manages the high-level
     execution of missions, instantiates the pilot and the Flask server, and
-    sends mission logging information to the LoggerDaemon. 
+    sends mission logging information to the LoggerDaemon.
 
     """
 
@@ -590,7 +590,7 @@ class Navigator(object):
         simulated_landing_camera -- Use simulated data if True, real landing data else
         takeoff_alt -- the height the drone should launch to in meters
         """
-        
+
         print "I'm a Navigator!"
         self._waypoint_index = 0
         self.takeoff_alt = takeoff_alt
@@ -625,7 +625,7 @@ class Navigator(object):
                     self.execute_mission(next_mission)
                     if self.pilot.vehicle.mode != 'GUIDED':
                         self.mission_queue = deque([])
-                        
+
             except KeyboardInterrupt:
                 self.pilot.RTL_and_land()
                 break
@@ -659,12 +659,12 @@ class Navigator(object):
         """Tell the pilot to land the drone."""
         print "Navigator entered land callback"
         self.pilot.land_drone()
-        
-        
+
+
     def find_target_and_land_cb(self, arg1=None):
         """Tell the pilot to find the target and land the drone"""
         print "Navigator entered find target and land callback"
-        
+
         # TODO Parse arg1 to get GPS coordinates and target ID
         self.find_target_and_land()
 
@@ -734,7 +734,7 @@ class Navigator(object):
         unparsed_mission -- a mission in the form of a dictionary, for example
                             from the FlaskServer.
         """
-        
+
         try:
             if unparsed_mission['plan'][0]['action'] != 'launch':
                 mission = self.parse_mission(unparsed_mission)
@@ -742,15 +742,15 @@ class Navigator(object):
                 # look at the terrible thing I'm doing! :D
                 # ... D:
                 mission = unparsed_mission
-                
+
             self.current_mission = mission
-            
+
             for event in mission["plan"]:
                if mission['plan'][0]['action'] != 'launch' and (self.pilot.vehicle.mode != 'GUIDED'):
 	           print 'aborting mission due to check'
                    self.mission_queue = deque([])
                    return
-                   
+
 	       print 'mission executing action {}'.format(event['action'])
                action = getattr(self, event['action'])
                #publish event start
@@ -819,7 +819,8 @@ class Navigator(object):
     def find_target_and_land_drone(self, gps_lat, gps_lon, target=None):
         """ Explanation of function """
         print "Searching for target"
-        
+
+        self.target_found = False
         self.landing_state = 0  # TODO Change to enumerated value
                                 # 0: Take off and head to target
                                 # 1: At target GPS location, no sighting
@@ -828,38 +829,91 @@ class Navigator(object):
                                 # 4: Landing, low altitude
                                 # 5: Landing, on ground
                                 # 9: Abort
-        
+
         # Fly to target waypoint
         alt_rel = 10
         waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
         self.pilot.goto_waypoint(waypoint_target, speed=70)
-        
+
+        print "Arrived at GPS target"
         self.landing_state = 1
-        
+
         # Initialize landing camera hardware and subscription
         self.hw_landing_cam = hardware.LandingCamera()
         pub.subscribe(self.landing_adjustment_cb, "sensor-messages.landingcam-data")
-        
+
+
+
         # Search until either target is found or a time out
         # Do a loop for a certain amount of time, movement, etc. whatever you think
-        # is an important metric. Check each look if the target has been found
+        # is an important metric. Check each loop if the target has been found
         # If so, starting the landing process
         # If target is not found within a time limit, abort mission, log error.
-        
-        self.landing_state = 2
-        print "Target found, Starting landing"
-        
+        start = time.time()
+        while(1):
+            if self.target_found is True:
+                self.vehicle.mode = VehicleMode("LAND")
+                self.vehicle.parameters['PLND_ENABLED'] = 1
+                self.vehicle.parameters['PLND_TYPE'] = 1
+                break
+            now = time.time()
+            elapsed = now - start
+            if elapsed >= 10:
+                self.vehicle.mode = VehicleMode("RTL")
+                print ("Target not found in 10 seconds")
+            time.sleep(0.1)
+
+        start = time.time()
+        while self.landing_state is not 5:
+            print ("Landing state: " + self.landing_state)
+            if self.target_found is False:
+                self.vehicle.parameters['LAND_SPEED'] = 30
+                now = time.time()
+                elapsed = now - start
+                if elapsed >= 2:
+                    self.vehicle.mode = VehicleMode("LOITER")
+                if elapsed >= 5:
+                    break
+            else:
+                if self.vehicle.mode is "LOITER":
+                    self.vehicle.mode = VehicleMode("LAND")
+                self.vehicle.parameters['LAND_SPEED'] = 50
+                start = time.time()
+            time.sleep(0.1)
+
+        if self.target_found is False:
+            print ("Target lost, return to home")
+            self.vehicle.mode = VehicleMode("RTL")
+        else:
+            print ("Landed")
+
+        self.hw_landing_cam.stop()
+
         # If target lost sight or other error condition, abort and return to home location
         # Other error condition may be altitude is decreasing too quickly (aka drone is crashing)
         # Received a message from the signpost to abort the data pickup
-        
-        
+
+
         # Else if target is not found
-        print "Target not found, Return to home"
-        
+
         # Stop thread, which should turn off camera and other peripherals
         # What do we do here?
-    
+
     def landing_adjustment_cb(self, arg1):
-        
-        self.landing_state = 
+        if arg1['found'] is True:
+            #TODO send landing message
+            self.target_found = True
+            print ("Landing message sent")
+        else:
+            self.target_found = False
+            print ("No landing message sent")
+
+        if arg1['distance'] <= 1.5:
+            self.landing_state = 4
+        elif arg1['distance'] <= 3.0:
+            self.landing_state = 3
+        elif arg1['distance'] > 4.5:
+            self.landing_state = 2
+
+        if self.vehicle.armed is False:
+            self.landing_state = 5

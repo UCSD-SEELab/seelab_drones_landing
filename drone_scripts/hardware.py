@@ -58,6 +58,7 @@ class LandingCamera(threading.Thread):
 
 
     def stop(self):
+            camera.close()
             self._stop_event.set()
 
 
