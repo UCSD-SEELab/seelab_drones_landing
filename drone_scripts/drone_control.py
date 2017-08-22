@@ -15,7 +15,7 @@ Navigator:
 """
 
 import dronekit
-from dronekit import VehicleMode
+from dronekit import VehicleMode, LocationGlobalRelative
 import copy
 from code import interact
 import dronekit_sitl
@@ -152,8 +152,18 @@ class LoggerDaemon(threading.Thread):
         self.daemon = True
         self._start_seconds = None
         self.read_config(config_file, drone_name)
+        self.setup_logging()
         self.setup_subs()
         self.start()
+
+                            
+    def setup_logging(self):
+        filename = time.strftime('Log_' + self.drone_info['name'] + '_' + 
+                                 self.drone_info['mission'] + '_%Y%m%d_%H%M%S.log', 
+                                 time.localtime())
+        logging.basicConfig(filename='Logs/' + filename, level=logging.DEBUG, 
+                            format='%(asctime)s: %(message)s', 
+                            datefmt='%Y%m%d %H%M%S')
 
 
     def read_config(self, filename, drone_name):
@@ -547,8 +557,7 @@ class Pilot(object):
 
 
     def land_drone(self):
-        """Land the drone at its current location."""
-        
+        """Land the drone at its current location."""    
         print "Vehicle {0} landing".format(self.instance)
         self.vehicle.mode = VehicleMode("LAND")
 
@@ -629,7 +638,7 @@ class Navigator(object):
         pub.subscribe(self.mission_cb, "flask-messages.mission")
         pub.subscribe(self.land_cb, "flask-messages.land")
         pub.subscribe(self.RTL_cb, "flask-messages.RTL")
-
+        pub.subscribe(self.find_target_and_land_cb, "flask-messages.find_target_and_land")
 
     def mission_cb(self, arg1=None):
         """Add an incoming mission to the mission queue."""
@@ -650,6 +659,14 @@ class Navigator(object):
         """Tell the pilot to land the drone."""
         print "Navigator entered land callback"
         self.pilot.land_drone()
+        
+        
+    def find_target_and_land_cb(self, arg1=None):
+        """Tell the pilot to find the target and land the drone"""
+        print "Navigator entered find target and land callback"
+        
+        # TODO Parse arg1 to get GPS coordinates and target ID
+        self.find_target_and_land()
 
 
     def RTL_cb(self, arg1=None):
@@ -797,3 +814,52 @@ class Navigator(object):
         Not currently used.
         """
         self.pilot.land_drone()
+
+
+    def find_target_and_land_drone(self, gps_lat, gps_lon, target=None):
+        """ Explanation of function """
+        print "Searching for target"
+        
+        self.landing_state = 0  # TODO Change to enumerated value
+                                # 0: Take off and head to target
+                                # 1: At target GPS location, no sighting
+                                # 2: Landing, high altitude
+                                # 3: Landing, medium altitude
+                                # 4: Landing, low altitude
+                                # 5: Landing, on ground
+                                # 9: Abort
+        
+        # Fly to target waypoint
+        alt_rel = 10
+        waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
+        self.pilot.goto_waypoint(waypoint_target, speed=70)
+        
+        self.landing_state = 1
+        
+        # Initialize landing camera hardware and subscription
+        self.hw_landing_cam = hardware.LandingCamera()
+        pub.subscribe(self.landing_adjustment_cb, "sensor-messages.landingcam-data")
+        
+        # Search until either target is found or a time out
+        # Do a loop for a certain amount of time, movement, etc. whatever you think
+        # is an important metric. Check each look if the target has been found
+        # If so, starting the landing process
+        # If target is not found within a time limit, abort mission, log error.
+        
+        self.landing_state = 2
+        print "Target found, Starting landing"
+        
+        # If target lost sight or other error condition, abort and return to home location
+        # Other error condition may be altitude is decreasing too quickly (aka drone is crashing)
+        # Received a message from the signpost to abort the data pickup
+        
+        
+        # Else if target is not found
+        print "Target not found, Return to home"
+        
+        # Stop thread, which should turn off camera and other peripherals
+        # What do we do here?
+    
+    def landing_adjustment_cb(self, arg1):
+        
+        self.landing_state = 

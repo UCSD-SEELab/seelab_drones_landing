@@ -26,8 +26,7 @@ from time import gmtime, strftime
 
 class LandingCamera(threading.Thread):
 
-    def __init__(self):
-
+    def __init__(self, target=None):
         super(LandingCamera, self).__init__()
         self.daemon = True
         self._width = 640
@@ -43,16 +42,27 @@ class LandingCamera(threading.Thread):
         self._camera.ISO = 100
         self._camera.meter_mode = 'matrix'
         self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
+        self._stop_event = threading.Event()
+        self._stop_event.clear() # Unnecessary
         self.start()
 
     def run(self):
-        pic = self._take_pic()
-        results = self._find_target(pic)
-        if results['found'] is True:
-            ("Target found")
-            self._callback(results)
-        else:
-            print ("Target not found")
+        while not(self.stopped):
+            pic = self._take_pic()
+            results, retval = self._find_target(pic)
+            if retval is True:
+                ("Target found")
+                self._callback(results)
+            else:
+                print ("Target not found")
+
+
+    def stop(self):
+            self._stop_event.set()
+
+
+    def stopped(self):
+        return self._stop_event.is_set()
 
 
     def distance(x1, y1, x2, y2):
@@ -108,6 +118,7 @@ class LandingCamera(threading.Thread):
             cv2.imwrite(path, vid)
             data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found':False}
             return data
+
 
 class AirSensor(threading.Thread):
     """Provide an interface to Christine/Michael's air sensor.
