@@ -16,7 +16,97 @@ import dronekit
 from subprocess import Popen, PIPE, call
 import sys
 from pubsub import pub
-    
+
+import cv2
+import cv2.aruco as aruco
+from picamera.array import PiRGBArray
+from picamera import PiCamera
+import os
+from time import gmtime, strftime
+
+class LandingCamera(threading.Thread):
+
+    def __init__(self):
+
+        super(LandingCamera, self).__init__()
+        self.daemon = True
+        self._width = 640
+        self._height = 480
+        self._template_L = .07
+        self._template_H = .07
+        self._xfov = 62.2 * math.pi/180
+        self._yfov = 48.8 * math.pi/180
+        self._camera = PiCamera()
+        self._camera.resolution = (self._width, self._height)
+        self._camera.framerate = 30
+        self._camera.shutter_speed = 1100
+        self._camera.ISO = 100
+        self._camera.meter_mode = 'matrix'
+        self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
+        self.start()
+
+    def run(self):
+        pic = self._take_pic()
+        results, retval = self._find_target(pic)
+        if retval is True:
+            ("Target found")
+            self.callback(results)
+        else:
+            print ("Target not found")
+
+
+    def distance(x1, y1, x2, y2):
+	    return math.hypot(x2-x1, y2-y1)
+
+    def _callback(self, land_data):
+        pub.sendMessage("sensor-messages.landingcam-data", arg1=land_data)
+
+    def _take_pic(self):
+    	rawCapt = PiRGBArray(self._camera, size = (self._width, self._height))
+    	time.sleep(0.1)
+    	self._camera.capture(rawCapt, format = "bgr", use_video_port = True)
+    	vid = rawCapt.array
+    	rawCapt.truncate(0)
+    	time.sleep(0.1)
+
+        return vid
+
+    def _find_target(self, vid):
+        corners, ids, rejects = aruco.detectMarker(vid, self._aruco_dic)
+        time.sleep(0.1)
+
+        if len(corners) is not 0:
+            print("Corners found")
+            sumx = 0
+    	    sumy = 0
+
+    	    for x in corners[0][0]:
+    		    sumx = sumx + x[0]
+    		    sumy = sumy + x[1]
+
+        	avgx = sumx/4
+        	avgy = sumy/4
+
+        	x = (avgx - self._width/2)*self._xfov/self._width
+        	y = (avgy - self._height/2)*self._yfov/self._height
+
+        	side1 = distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][1][0], corners[0][0][1][1])
+        	side2 = distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][2][0], corners[0][0][2][1])
+    	    area = side1 * side2
+
+            if _self._template_H is .07:
+                z = 4201.1 * (area ** -0.496)
+            else:
+                z = 12632 * (area ** -0.502)
+
+            data = {'xoffset': x, 'yoffset': y, 'distance': z}
+            return data, True
+
+        else:
+            print("Corners not found, picture saved")
+            path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", gmtime()) + '.jpg'
+            cv2.imwrite(path, vid)
+            return 0, False
 
 class AirSensor(threading.Thread):
     """Provide an interface to Christine/Michael's air sensor.
