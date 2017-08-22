@@ -15,7 +15,7 @@ Navigator:
 """
 
 import dronekit
-from dronekit import VehicleMode
+from dronekit import VehicleMode, LocationGlobalRelative
 import copy
 from code import interact
 import dronekit_sitl
@@ -638,7 +638,7 @@ class Navigator(object):
         pub.subscribe(self.mission_cb, "flask-messages.mission")
         pub.subscribe(self.land_cb, "flask-messages.land")
         pub.subscribe(self.RTL_cb, "flask-messages.RTL")
-        pub.subscribe(self.find_target_and_land_cb, "flash-messages.find_target_and_land")
+        pub.subscribe(self.find_target_and_land_cb, "flask-messages.find_target_and_land")
 
     def mission_cb(self, arg1=None):
         """Add an incoming mission to the mission queue."""
@@ -816,28 +816,50 @@ class Navigator(object):
         self.pilot.land_drone()
 
 
-    def find_target_and_land_drone(self, gps_lat, gps_long, target):
+    def find_target_and_land_drone(self, gps_lat, gps_lon, target=None):
         """ Explanation of function """
         print "Searching for target"
-        # What do we do here?
         
-        # Initialize landing camera hardware
+        self.landing_state = 0  # TODO Change to enumerated value
+                                # 0: Take off and head to target
+                                # 1: At target GPS location, no sighting
+                                # 2: Landing, high altitude
+                                # 3: Landing, medium altitude
+                                # 4: Landing, low altitude
+                                # 5: Landing, on ground
+                                # 9: Abort
         
-        # Initialize subscription to landing camera 
+        # Fly to target waypoint
+        alt_rel = 10
+        waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
+        self.pilot.goto_waypoint(waypoint_target, speed=70)
+        
+        self.landing_state = 1
+        
+        # Initialize landing camera hardware and subscription
+        self.hw_landing_cam = hardware.LandingCamera()
+        pub.subscribe(self.landing_adjustment_cb, "sensor-messages.landingcam-data")
         
         # Search until either target is found or a time out
+        # Do a loop for a certain amount of time, movement, etc. whatever you think
+        # is an important metric. Check each look if the target has been found
+        # If so, starting the landing process
+        # If target is not found within a time limit, abort mission, log error.
         
-        
-        # If target is found
+        self.landing_state = 2
         print "Target found, Starting landing"
-        # What do we do here?
         
-        # Send landing messages as they come in from the subscription? Use a callback function instead?
-        
-        # If we lose the image, what do we do?
+        # If target lost sight or other error condition, abort and return to home location
+        # Other error condition may be altitude is decreasing too quickly (aka drone is crashing)
+        # Received a message from the signpost to abort the data pickup
         
         
         # Else if target is not found
         print "Target not found, Return to home"
-        # What do we do here?
         
+        # Stop thread, which should turn off camera and other peripherals
+        # What do we do here?
+    
+    def landing_adjustment_cb(self, arg1):
+        
+        self.landing_state = 
