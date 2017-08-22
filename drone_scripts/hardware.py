@@ -61,12 +61,8 @@ class LandingCamera(threading.Thread):
 
 
     def stop(self):
-<<<<<<< HEAD
             camera.close()
             self._stop_event.set()
-=======
-        self._stop_event.set()
->>>>>>> e4514634b56637c68bcbe5d36847287eaaa68b40
 
 
     def stopped(self):
@@ -106,9 +102,9 @@ class LandingCamera(threading.Thread):
         	x = (avgx - self._width/2)*self._xfov/self._width
         	y = (avgy - self._height/2)*self._yfov/self._height
 
-        	side1 = distance(corners[0][0][0][0], corners[0][0][0][1], 
+        	side1 = distance(corners[0][0][0][0], corners[0][0][0][1],
                              corners[0][0][1][0], corners[0][0][1][1])
-        	side2 = distance(corners[0][0][0][0], corners[0][0][0][1], 
+        	side2 = distance(corners[0][0][0][0], corners[0][0][0][1],
                              corners[0][0][2][0], corners[0][0][2][1])
     	    area = side1 * side2
 
@@ -117,7 +113,6 @@ class LandingCamera(threading.Thread):
             else:
                 z = 12632 * (area ** -0.502)
 
-<<<<<<< HEAD
             data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found': True}
             return data
 
@@ -127,18 +122,6 @@ class LandingCamera(threading.Thread):
             cv2.imwrite(path, vid)
             data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found':False}
             return data
-=======
-            data = {'xoffset': x, 'yoffset': y, 'distance': z, 'target_found':True}
-
-        else:
-            print("Corners not found")
-            #print("Corners not found, picture saved")
-            #path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-            #cv2.imwrite(path, vid)
-            data = {'xoffset': -1, 'yoffset': -1, 'distance': -1, 'target_found':False}
-
-        return data
->>>>>>> e4514634b56637c68bcbe5d36847287eaaa68b40
 
 
 class AirSensor(threading.Thread):

@@ -158,23 +158,12 @@ class LoggerDaemon(threading.Thread):
 
 
     def setup_logging(self):
-<<<<<<< HEAD
         filename = time.strftime('Log_' + self.drone_info['name'] + '_' +
                                  self.drone_info['mission'] + '_%Y%m%d_%H%M%S.log',
                                  time.localtime())
         logging.basicConfig(filename='Logs/' + filename, level=logging.DEBUG,
                             format='%(asctime)s: %(message)s',
-=======
-        filename = time.strftime('Log_' + self.drone_info['name'] + '_' + \
-                                 self.drone_info['mission'] + '_%Y%m%d_%H%M%S.log', 
-                                 time.localtime())
-        logging.basicConfig(filename='Logs/' + filename, level=logging.DEBUG, 
-                            format='%(asctime)s, %(message)s', 
->>>>>>> e4514634b56637c68bcbe5d36847287eaaa68b40
                             datefmt='%Y%m%d %H%M%S')
-        logging.info('Initialized logger')
-        logging.info('\'drone_name\':' + self.drone_info['name'] + \
-                     ', \'mission_name\':' + self.drone_info['mission'])
 
 
     def read_config(self, filename, drone_name):
@@ -235,7 +224,6 @@ class LoggerDaemon(threading.Thread):
     def mission_data_cb(self, arg1=None):
         """Add incoming mission event to log."""
         print 'entered mission_data_cb'
-<<<<<<< HEAD
         event_dict = copy.deepcopy(arg1)
         event_json = event_dict
         # TODO Add logging to file
@@ -251,20 +239,14 @@ class LoggerDaemon(threading.Thread):
         # TODO Add logging to file
 
 
-=======
-        # event_dict = copy.deepcopy(arg1)
-        # event_json = event_dict
-        logging.info('\'mission_data\', ' + ', '.join('\'%s\':%r' % (key,val) for (key,val) in arg1.iteritems()))
-    
-    
->>>>>>> e4514634b56637c68bcbe5d36847287eaaa68b40
     def landingcam_data_cb(self, arg1=None):
         """Add incoming landing camera data to log."""
         current_time = self.mission_time()
         if current_time is not None:
             print 'entered landingcam_data_cb'
             print arg1
-            logging.info('\'mission_data\', ' + ', '.join('\'%s\':%r' % (key,val) for (key,val) in arg1.iteritems()))
+            data = copy.deepcopy(arg1)
+            # TODO Add logging to file
 
 
     def rel_from_glob(self, global_loc):
@@ -305,14 +287,8 @@ class LoggerDaemon(threading.Thread):
                     and location_global.lon
                     and location_global.alt
                     and current_time):
-                        
-                logging.info('\'gps\', \'lat\':%3.6f, \'lon\':%3.6f,' + \
-                             ' \'alt\':%3.6f, \'time\':%3.6f' \
-                             % (location_global.lat, location_global.lon,
-                                location_global.alt, current_time))   
-                                
                 location_relative = self.rel_from_glob(location_global)
-                
+                # TODO Add logging to file
             time.sleep(1)
 
 
@@ -356,7 +332,7 @@ class Pilot(object):
         Pilot.instance += 1
         self.instance = Pilot.instance
         print "I'm a pilot, instance number {0}".format(self.instance)
-        self.groundspeed = 0.5
+        self.groundspeed = .5
         if sim_speedup is not None:
             Pilot.sim_speedup = sim_speedup  # Everyone needs to go the same speed
             simulated = True
@@ -932,12 +908,12 @@ class Navigator(object):
             self.target_found = False
             print ("No landing message sent")
 
-        if arg1['distance'] <= 1.5:
-            self.landing_state = 4
-        elif arg1['distance'] <= 3.0:
-            self.landing_state = 3
-        elif arg1['distance'] > 4.5:
-            self.landing_state = 2
-
         if self.vehicle.armed is False:
             self.landing_state = 5
+        else:
+            if arg1['distance'] <= 1.5:
+                self.landing_state = 4
+            elif arg1['distance'] <= 3.0:
+                self.landing_state = 3
+            elif arg1['distance'] > 4.5:
+                self.landing_state = 2
