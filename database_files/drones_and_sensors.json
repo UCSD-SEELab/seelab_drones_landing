@@ -1,0 +1,69 @@
+{
+    "drones": [
+        {
+            "name": "Alpha",
+            "FAA_ID": "michaels"
+        },
+        {
+            "name": "Beta",
+            "FAA_ID": "michaels"
+        }
+    ],
+    "sensor_types": [
+        "air",
+		"GPS",
+        "RF",
+        "SDR"
+    ],
+    "sensors": [
+        {
+            "name": "air1",
+            "type": "air"
+        },
+        {
+            "name": "air2",
+            "type": "air"
+        },
+		{
+            "name": "GPS1",
+            "type": "GPS"
+        },
+        {
+            "name": "RF1",
+            "type": "RF"
+        },
+        {
+            "name": "SDR1",
+            "type": "SDR"
+        },
+		{
+            "name": "GPS2",
+            "type": "GPS"
+        },
+        {
+            "name": "RF2",
+            "type": "RF"
+        },
+        {
+            "name": "SDR2",
+            "type": "SDR"
+        }
+    ],
+    "events":[
+        {
+            "type": "auto_nav"
+        },
+		{
+            "type": "air_sensor_data"
+        },
+        {
+            "type": "RF_sensor_data"
+        },
+        {
+            "type": "SDR_sensor_data"
+        },
+        {
+            "type": "mission_event"
+        }
+    ]
+}

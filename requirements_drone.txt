@@ -1,0 +1,4 @@
+pymavlink==1.1.73
+dronekit-sitl
+geopy
+pyserial

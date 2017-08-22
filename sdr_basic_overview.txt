@@ -1,0 +1,58 @@
+Most of what you care about will be in the "drone_scripts" folder of this directory,
+or the .grc files (gnu radio) on the SEELab drive (these will just serve as an example,
+less time-constrained implementations should be much more robust than those). Most of
+the documentation you will need for various functions are in the .py files themselves,
+so I will just give a high level overview of each relevant SDR file here.
+
+sdr_readings.py     -- This script "runs the show" so to speak. It runs on all drones,
+			but must be slightly modified depending on if the drone is a
+			"master" or "slave". It interacts with the rx/tx 2400 scripts,
+			blade_rx.py, and extract_bits.py. It handles scanning the
+			spectrum and establishing FSK communication at multiple
+			frequencies, as well as storing all "relevant" data in the
+			database.
+			Note: Some of the data storage is quite sloppy because it
+				was patchwork fixes or last minute (in the field)
+				modifications to add additional data without introducing
+				new bugs that I didn't have time to debug. Feel free
+				to improve it.
+
+blade_rx.py         -- This file may serve as a good example of how to "manually"
+			interact with the bladeRF when connected via USB, however
+			it will likely not be of much use to you. It is required to
+			load the FPGA image when the bladeRF is used with a raspberry
+			pi (just look at how I do it in the rx_2400_r2.py (or tx
+			version) to figure out how), however Windows will do this
+			automatically if you have bladeRF-cli/libbladerf and gnuradio
+			properly installed (not sure about mac).
+
+sdr_readings_rtl.py -- This is similar to sdr_readings.py but it uses the rtl-sdr
+			(the cheap one) so you may use this to learn how some of this
+			stuff works (or to debug comm between drones) but other than
+			that it is probably of limited use. Can store in database or
+			file.
+
+scanFM.py           -- This is also similar to sdr_readings_rtl.py except that it doesn't
+			really interact with the database (just saves a file). You can
+			use it to scan FM frequencies to see the modulation (or anything
+			in the rtl-sdr's range). Again, maybe good to learn how to do some
+			of this stuff, but likely not very useful.
+
+extract_bits.py     -- This function parses a message out of a binary file of received
+			spectrum. Essentially the rx software stores binary data to a
+			local file and then this looks through the file to see if there
+			is a message to recover. It can certainly be improved, but you
+			will likely largely write your own version of this depending on
+			the communication architecture you design.
+
+rx_2400_r2.py       -- This function receives an FSK modulated signal at approx. 2400
+			baud, for use on the Raspberry Pi. It was originally output from
+			the corresponding .grc file and then modified (according to
+			"bladerf_readme.txt" of this directory) to load the fpga image
+			and be able to interact with the drone flight/control software.
+			When you design new radio architectures you will make similar
+			modifications. This is a good file to learn off of and it should
+			work in flight (when drone's are 10s of meters apart), but you
+			will generate a different file for each communication architecture.
+
+tx_2400_r2.py       -- Same as rx_2400_r2.py but this is the transmit version of the script.
