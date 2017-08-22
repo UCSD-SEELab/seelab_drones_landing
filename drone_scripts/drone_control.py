@@ -152,8 +152,18 @@ class LoggerDaemon(threading.Thread):
         self.daemon = True
         self._start_seconds = None
         self.read_config(config_file, drone_name)
+        self.setup_logging()
         self.setup_subs()
         self.start()
+
+                            
+    def setup_logging(self):
+        filename = time.strftime('Log_' + self.drone_info['name'] + '_' + 
+                                 self.drone_info['mission'] + '_%Y%m%d_%H%M%S.log', 
+                                 time.localtime())
+        logging.basicConfig(filename='Logs/' + filename, level=logging.DEBUG, 
+                            format='%(asctime)s: %(message)s', 
+                            datefmt='%Y%m%d %H%M%S')
 
 
     def read_config(self, filename, drone_name):
@@ -547,8 +557,7 @@ class Pilot(object):
 
 
     def land_drone(self):
-        """Land the drone at its current location."""
-        
+        """Land the drone at its current location."""    
         print "Vehicle {0} landing".format(self.instance)
         self.vehicle.mode = VehicleMode("LAND")
 
@@ -629,7 +638,7 @@ class Navigator(object):
         pub.subscribe(self.mission_cb, "flask-messages.mission")
         pub.subscribe(self.land_cb, "flask-messages.land")
         pub.subscribe(self.RTL_cb, "flask-messages.RTL")
-
+        pub.subscribe(self.find_target_and_land_cb, "flash-messages.find_target_and_land")
 
     def mission_cb(self, arg1=None):
         """Add an incoming mission to the mission queue."""
@@ -650,6 +659,14 @@ class Navigator(object):
         """Tell the pilot to land the drone."""
         print "Navigator entered land callback"
         self.pilot.land_drone()
+        
+        
+    def find_target_and_land_cb(self, arg1=None):
+        """Tell the pilot to find the target and land the drone"""
+        print "Navigator entered find target and land callback"
+        
+        # TODO Parse arg1 to get GPS coordinates and target ID
+        self.find_target_and_land()
 
 
     def RTL_cb(self, arg1=None):
@@ -797,3 +814,30 @@ class Navigator(object):
         Not currently used.
         """
         self.pilot.land_drone()
+
+
+    def find_target_and_land_drone(self, gps_lat, gps_long, target):
+        """ Explanation of function """
+        print "Searching for target"
+        # What do we do here?
+        
+        # Initialize landing camera hardware
+        
+        # Initialize subscription to landing camera 
+        
+        # Search until either target is found or a time out
+        
+        
+        # If target is found
+        print "Target found, Starting landing"
+        # What do we do here?
+        
+        # Send landing messages as they come in from the subscription? Use a callback function instead?
+        
+        # If we lose the image, what do we do?
+        
+        
+        # Else if target is not found
+        print "Target not found, Return to home"
+        # What do we do here?
+        
