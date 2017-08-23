@@ -436,7 +436,6 @@ class Pilot(object):
         self.hold_altitude = target_alt
         print 'Basic pre-arm checks'
         # Don't try to arm until autopilot is ready
-        cnt = 0
         while not self.vehicle.is_armable:
             print ' Waiting for vehicle {0} to initialise...'.format(self.instance)
             # print(self.vehicle.gps_0.fix_type)
@@ -647,7 +646,7 @@ class Navigator(object):
         print 'entering run loop'
         while True:
             try:
-                time.sleep(.01)
+                time.sleep(0.1)
                 if self.mission_queue:
                     next_mission = self.mission_queue.popleft()
                     self.execute_mission(next_mission)
@@ -693,8 +692,11 @@ class Navigator(object):
         '''Tell the pilot to find the target and land the drone'''
         print 'Navigator entered find target and land callback'
 
-        # TODO Parse arg1 to get GPS coordinates and target ID
-        self.find_target_and_land()
+        gps_lat = arg1['gps_lat']
+        gps_lon = arg1['gps_lon']
+        target = arg1['target']
+        
+        self.find_target_and_land(gps_lat, gps_lon, target)
 
 
     def RTL_cb(self, arg1=None):
@@ -893,9 +895,9 @@ class Navigator(object):
         while (self.landing_state in [2,3,4]):
             if (self.target_found == False):
                 if (self.vehicle.mode == VehicleMode('LAND')):
-                    self.vehicle.mode = VehicleMode('LOITER')
+                    self.vehicle.mode = VehicleMode('GUIDED')
                     time_start = time.time()
-                    print ('Target lost. Switch to LOITER.')
+                    print ('Target lost. Switch to GUIDED.')
                 elif ((time.time() - time_start) > timeout) :
                     self.landing_state = 9  # 9: Abort
                     self.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
@@ -904,7 +906,7 @@ class Navigator(object):
                     print ('Target lost for %d seconds during landing' % timeout)
                     break
             else:
-                if (self.vehicle.mode == VehicleMode('LOITER')):
+                if (self.vehicle.mode == VehicleMode('GUIDED')):
                     self.vehicle.mode = VehicleMode('LAND')
             time.sleep(0.1)
 

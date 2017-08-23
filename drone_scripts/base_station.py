@@ -174,6 +174,7 @@ class DroneCoordinator(object):
         print mission
         self.send_mission(mission, drone_addr) 
 
+
     def circle_test(self, drone_address, relative):
         """Fly the drone in a circle to test generation of circle missions."""
         mission_generator = MissionGenerator()
@@ -188,6 +189,7 @@ class DroneCoordinator(object):
         self.launch_drone(drone_address)
         self.send_mission(mission, drone_address)
 
+
     def read_config(self, filename):
         """Read a config file to find the current mission_name.
 
@@ -200,6 +202,7 @@ class DroneCoordinator(object):
             config = json.load(fp)
         self.mission_name = config['mission_name']
 
+
     def run_test_mission(self, filename, drone_address):
         """Launch a drone and send it on a mission from a file."""
         mission = self.load_mission(
@@ -207,6 +210,7 @@ class DroneCoordinator(object):
         )
         self.launch_drone(drone_address)
         self.send_mission(mission, drone_address)
+
 
     def demo_control_loop(self):
         """Run the October 2016 Terraswarm demo.
@@ -233,10 +237,12 @@ class DroneCoordinator(object):
                 #pass
             time.sleep(1)
 
+
     def make_url(self, address, path):
         """Turn an address (not an IP) into a full URL for use with Flask."""
         url = address + path
         return url
+
 
     def launch_drone(self, drone_address):
         """Launch the drone at drone_address."""
@@ -245,12 +251,14 @@ class DroneCoordinator(object):
         r = requests.post(url, start_time)
         return r
 
+
     def send_mission(self, mission_json, drone_address):
         """Send a mission (JSON string) to the drone at drone_address."""
         url = self.make_url(drone_address, 'mission')
         mission_string = json.dumps(mission_json)
         r = requests.post(url, mission_string)
         return r
+
 
     def create_point_mission(self, action, relative_point, name):
         """Create a mission (JSON string) and return it.
@@ -279,11 +287,13 @@ class DroneCoordinator(object):
         }
         return mission_dict
 
+
     def load_mission(self, filename):
         """Load a mission (JSON string) from a JSON file."""
         with open(filename) as fp:
             mission = json.load(fp)
         return mission
+
 
     def establish_database_connection(self):
         """Setup the database connection through the sqlalchemy interface."""
@@ -291,6 +301,7 @@ class DroneCoordinator(object):
         db_url = 'mysql+mysqldb://%s:%s@localhost/%s' % (local_user, local_password, db_name)
         self.engine = create_engine(db_url)
         self.Session = sessionmaker(bind=self.engine)
+
 
     def get_data(self):
         """Return all air sensor data from drone Alpha for current mission.
@@ -321,6 +332,7 @@ class DroneCoordinator(object):
             ).all()
         return data
 
+
     def get_data_beta(self):
         """Return all GPS readings from drone Beta for the current mission."""
         with self.scoped_session() as session:
@@ -340,6 +352,7 @@ class DroneCoordinator(object):
                 Drone.name == 'Beta',
             ).all()
         return data
+
 
     def clean_data(self, points):
         """Take list of records from the database and return list of points
@@ -379,6 +392,7 @@ class DroneCoordinator(object):
         # print "Removed {0} duplicates".format(len(delete))
         return data
     
+    
     def find_areas_of_interest(self, clean_data):
         """Add any sensor readings over the threshold to the list of AoIs.
 
@@ -398,6 +412,7 @@ class DroneCoordinator(object):
         if self.areas_of_interest:
             self.max_id = max(self.areas_of_interest, key=lambda point: point[3])
 
+
     def investigate_next_area(self):
         """Send the secondary drone to investigate the next AoI."""
         lat, lon, reading, id = self.areas_of_interest.popleft()
@@ -414,6 +429,7 @@ class DroneCoordinator(object):
         print "launching second drone"
         #self.send_mission(mission, self.secondary_drone_addr)
         self.points_investigated += 1
+
 
     @contextmanager
     def scoped_session(self):
