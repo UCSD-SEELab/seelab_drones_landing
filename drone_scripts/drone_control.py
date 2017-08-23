@@ -17,25 +17,19 @@ Navigator:
 import dronekit
 from dronekit import VehicleMode, LocationGlobalRelative
 import copy
-from code import interact
 import dronekit_sitl
 from nav_utils import relative_to_global, get_ground_distance
 import nav_utils
 import threading
-import random
 import json
 import tempfile
-import socket
-import Queue
-import numpy
 import time
-import sys
 import hardware
 import logging
 from pubsub import pub
 from flask import Flask, request
-from contextlib import contextmanager
 from collections import deque
+from pymavlink import mavutil
 
 app = Flask(__name__)
 
@@ -909,22 +903,12 @@ class Navigator(object):
         
 
     def landing_adjustment_cb(self, arg1):
-<<<<<<< .merge_file_a10320
-        if arg1['found'] is True:
-            #TODO send landing message
-            self.target_found = True
-            print ('Landing message sent')
-        else:
-            self.target_found = False
-            print ('No landing message sent')
-=======
->>>>>>> .merge_file_a10332
-
         if self.vehicle.armed is False:
             self.landing_state = 5
         else:
             if arg1['found'] is True:
-                #TODO send landing message
+                self.pilot.send_land_message(arg1['xoffset'], arg1['yoffset'], 
+                                             arg1['distance'])
                 self.target_found = True
                 if arg1['distance'] <= 1.5:
                     self.landing_state = 4
@@ -932,7 +916,9 @@ class Navigator(object):
                     self.landing_state = 3
                 elif arg1['distance'] > 4.5:
                     self.landing_state = 2
-                print ("Landing message sent and landing state adjusted to: " + self.landing_state)
+                print ("Landing message sent and landing state adjusted to: "+\
+                       self.landing_state)
             else:
                 self.target_found = False
-                print ("No landing message sent and landing state is: " + self.landing_state)
+                print ("No landing message sent and landing state is: " +\
+                       self.landing_state)
