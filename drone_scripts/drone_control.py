@@ -572,6 +572,19 @@ class Pilot(object):
         print 'Closing vehicle'
         self.vehicle.close()
 
+    def send_land_message(self, x, y, z):
+    	message = self.vehicle.message_factory.landing_target_encode(
+    		0,	# ms since boot, a time stamp
+    		0,	# target ID for case of multiple targets
+    		mavutil.mavlink.MAV_FRAME_BODY_NED,	# MAV_FRAME enum specifying frame, try mavutil.mavlink.MAV_FRAME_BODY_NED
+    		x,	# X-axis angular offset in radians of target from center of image
+    		y,	# Y-axis angular offset
+    		z,	# distance to the target from vehicle in meters
+    		0,	# size of target in radians along x-axis
+    		0)	# size along y-axis
+    	self.vehicle.send_mavlink(message)
+    	self.vehicle.flush()
+
 
 class Navigator(object):
     '''Provide a class to manage high-level navigation and mission execution.
@@ -896,6 +909,7 @@ class Navigator(object):
         
 
     def landing_adjustment_cb(self, arg1):
+<<<<<<< .merge_file_a10320
         if arg1['found'] is True:
             #TODO send landing message
             self.target_found = True
@@ -903,13 +917,22 @@ class Navigator(object):
         else:
             self.target_found = False
             print ('No landing message sent')
+=======
+>>>>>>> .merge_file_a10332
 
         if self.vehicle.armed is False:
             self.landing_state = 5
         else:
-            if arg1['distance'] <= 1.5:
-                self.landing_state = 4
-            elif arg1['distance'] <= 3.0:
-                self.landing_state = 3
-            elif arg1['distance'] > 4.5:
-                self.landing_state = 2
+            if arg1['found'] is True:
+                #TODO send landing message
+                self.target_found = True
+                if arg1['distance'] <= 1.5:
+                    self.landing_state = 4
+                elif arg1['distance'] <= 3.0:
+                    self.landing_state = 3
+                elif arg1['distance'] > 4.5:
+                    self.landing_state = 2
+                print ("Landing message sent and landing state adjusted to: " + self.landing_state)
+            else:
+                self.target_found = False
+                print ("No landing message sent and landing state is: " + self.landing_state)
