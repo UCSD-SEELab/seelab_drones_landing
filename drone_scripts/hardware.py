@@ -102,13 +102,13 @@ class LandingCamera(threading.Thread):
             x = (avgx - self._width/2)*self._xfov/self._width
             y = (avgy - self._height/2)*self._yfov/self._height
 
-            side1 = distance(corners[0][0][0][0], corners[0][0][0][1],
+            side1 = self.distance(corners[0][0][0][0], corners[0][0][0][1],
                              corners[0][0][1][0], corners[0][0][1][1])
-            side2 = distance(corners[0][0][0][0], corners[0][0][0][1],
+            side2 = self.distance(corners[0][0][0][0], corners[0][0][0][1],
                              corners[0][0][2][0], corners[0][0][2][1])
     	    area = side1 * side2
 
-            if _self._template_H is .07:
+            if self._template_H is .07:
                 z = 4201.1 * (area ** -0.496)
             else:
                 z = 12632 * (area ** -0.502)
