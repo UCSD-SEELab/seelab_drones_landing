@@ -105,6 +105,18 @@ class FlaskServer(threading.Thread):
         '''Send an acknowledgement to whoever sent the request.'''
         print 'entered flask ack function'
         return 'ack'
+        
+    @app.route('/find_target_and_land', methods=['POST'])
+    def find_target_and_land_func():
+        '''Publish the target location and (optional) target symbols to the 
+           find_target_and_land topic.'''
+        print 'entered flask find_target_and_land function'
+        target_info = json.loads(request.data)
+        pub.sendMessage(
+            'flask-messages.find_target_and_land',
+            arg1=target_info,
+        )
+        return 'received target info for find_target_and_land'
 
 
     def run(self):
@@ -244,7 +256,7 @@ class LoggerDaemon(threading.Thread):
         if current_time is not None:
             print 'entered landingcam_data_cb'
             print arg1
-            logging.info('\'mission_data\', ' + ', '.join('\'%s\':%r' % (key,val)\
+            logging.info('\'landingcam_data\', ' + ', '.join('\'%s\':%r' % (key,val)\
                          for (key,val) in arg1.iteritems()))
 
 
@@ -912,7 +924,7 @@ class Navigator(object):
         self.hw_landing_cam.stop()
         
 
-    def landing_adjustment_cb(self, arg1):
+    def landing_adjustment_cb(self, arg1=None):
         if self.vehicle.armed is False:
             self.landing_state = 5
         else:

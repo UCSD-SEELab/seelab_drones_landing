@@ -50,8 +50,8 @@ class LandingCamera(threading.Thread):
 
     def run(self):
         while not(self.stopped):
-            pic = self._take_pic()
-            results = self._find_target(pic)
+            self._take_pic()
+            results = self._find_target(self._rawCapt)
             if results['target_found'] is True:
                 print ("Target found")
                 self._callback(results)
@@ -61,8 +61,10 @@ class LandingCamera(threading.Thread):
 
 
     def stop(self):
-            camera.close()
-            self._stop_event.set()
+        path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+        cv2.imwrite(path, self._rawCapt)
+        self._camera.close()
+        self._stop_event.set()
 
 
     def stopped(self):
@@ -81,11 +83,9 @@ class LandingCamera(threading.Thread):
         self._rawCapt.truncate(0)
     	self._camera.capture(self._rawCapt, format = "bgr", use_video_port = True)
 
-        return rawCapt.array
 
-
-    def _find_target(self, vid):
-        corners, ids, rejects = aruco.detectMarker(vid, self._aruco_dic)
+    def _find_target(self, pic):
+        corners, ids, rejects = aruco.detectMarker(pic, self._aruco_dic)
 
         if len(corners) is not 0:
             print("Corners found")
@@ -96,15 +96,15 @@ class LandingCamera(threading.Thread):
     		    sumx = sumx + x[0]
     		    sumy = sumy + x[1]
 
-        	avgx = sumx/4
-        	avgy = sumy/4
+            avgx = sumx/4
+            avgy = sumy/4
 
-        	x = (avgx - self._width/2)*self._xfov/self._width
-        	y = (avgy - self._height/2)*self._yfov/self._height
+            x = (avgx - self._width/2)*self._xfov/self._width
+            y = (avgy - self._height/2)*self._yfov/self._height
 
-        	side1 = distance(corners[0][0][0][0], corners[0][0][0][1],
+            side1 = distance(corners[0][0][0][0], corners[0][0][0][1],
                              corners[0][0][1][0], corners[0][0][1][1])
-        	side2 = distance(corners[0][0][0][0], corners[0][0][0][1],
+            side2 = distance(corners[0][0][0][0], corners[0][0][0][1],
                              corners[0][0][2][0], corners[0][0][2][1])
     	    area = side1 * side2
 
@@ -117,10 +117,8 @@ class LandingCamera(threading.Thread):
             return data
 
         else:
-            print("Corners not found, picture saved")
-            path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", gmtime()) + '.jpg'
-            cv2.imwrite(path, vid)
-            data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found':False}
+            print("Corners not found")
+            data = {'xoffset': -1, 'yoffset': -1, 'distance': -1, 'found':False}
             return data
 
 
