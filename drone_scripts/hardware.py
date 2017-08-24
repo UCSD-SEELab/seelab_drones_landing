@@ -5,16 +5,15 @@ This currently only has the AirSensor object, the RF sensor object should
 probably be merged into this file, or this file should be renamed.
 """
 import threading
-from threading import Thread
-import json
-import random
+#import json
+#import random
 import math
-import serial
+#import serial
 import time
-import drone_control
-import dronekit
-from subprocess import Popen, PIPE, call
-import sys
+#import drone_control
+#import dronekit
+#from subprocess import Popen, PIPE, call
+#import sys
 from pubsub import pub
 
 import cv2
@@ -52,7 +51,7 @@ class LandingCamera(threading.Thread):
         while not(self.stopped):
             self._take_pic()
             results = self._find_target(self._rawCapt)
-            if results['target_found'] is True:
+            if (results['found'] == True):
                 print ("Target found")
                 self._callback(results)
             else:
@@ -122,7 +121,7 @@ class LandingCamera(threading.Thread):
             return data
 
 
-class AirSensor(threading.Thread):
+'''class AirSensor(threading.Thread):
     """Provide an interface to Christine/Michael's air sensor.
 
     This class can either connect to an existing air sensor plugged into one of
@@ -212,3 +211,18 @@ class AirSensor(threading.Thread):
         reading = max(raw, 2) * 200 + random.uniform(5, 15)
         reading_dict = {"CO2":reading}
         return reading_dict
+'''
+
+def output_cb(arg1=None):
+    print arg1
+
+if __name__ == '__main__':
+    timeout = 5
+    
+    pub.subscribe(output_cb, 'sensor-messages.landingcam-data')
+    landing_cam = LandingCamera()
+    
+    for _ in xrange(timeout):
+        time.sleep(1)
+    
+    landing_cam.stop()
