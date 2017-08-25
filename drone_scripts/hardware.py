@@ -27,7 +27,7 @@ class LandingCamera(threading.Thread):
 
     def __init__(self, target=None):
         super(LandingCamera, self).__init__()
-        self.daemon = True
+        #self.daemon = True
         self._width = 640
         self._height = 480
         self._template_L = .07
@@ -38,7 +38,7 @@ class LandingCamera(threading.Thread):
         self._camera.resolution = (self._width, self._height)
         self._camera.framerate = 30
         self._camera.shutter_speed = 1100
-        self._camera.ISO = 100
+        self._camera.ISO = 800
         self._camera.meter_mode = 'matrix'
         self._rawCapt = PiRGBArray(self._camera, size = (self._width, self._height))
         self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
@@ -48,21 +48,24 @@ class LandingCamera(threading.Thread):
 
 
     def run(self):
-        while not(self.stopped):
+        while not(self.stopped()):
             self._take_pic()
-            results = self._find_target(self._rawCapt)
+            results = self._find_target(self._rawCapt.array)
             if (results['found'] == True):
                 print ("Target found")
                 self._callback(results)
+	#	path = str(os.getcwd()) + '/Found' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
             else:
+	#   	path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target not found")
+        #   cv2.imwrite(path, self._rawCapt.array)
             time.sleep(0.1)
 
+        self._camera.close()
 
     def stop(self):
-        path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-        cv2.imwrite(path, self._rawCapt)
-        self._camera.close()
+        #path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+        #cv2.imwrite(path, self._rawCapt)
         self._stop_event.set()
 
 
@@ -70,7 +73,7 @@ class LandingCamera(threading.Thread):
         return self._stop_event.is_set()
 
 
-    def distance(x1, y1, x2, y2):
+    def distance(self, x1, y1, x2, y2):
 	    return math.hypot(x2-x1, y2-y1)
 
 
@@ -84,7 +87,7 @@ class LandingCamera(threading.Thread):
 
 
     def _find_target(self, pic):
-        corners, ids, rejects = aruco.detectMarker(pic, self._aruco_dic)
+        corners, ids, rejects = aruco.detectMarkers(pic, self._aruco_dic)
 
         if len(corners) is not 0:
             print("Corners found")
@@ -98,19 +101,28 @@ class LandingCamera(threading.Thread):
             avgx = sumx/4
             avgy = sumy/4
 
-            x = (avgx - self._width/2)*self._xfov/self._width
-            y = (avgy - self._height/2)*self._yfov/self._height
+	    # adjusting for camera rotation
+	    # actual x (North) is y
+	    # actual y (East) is -x
+	    # following commented out is without adjusting			
+            # x = (avgx - self._width/2)*self._xfov/self._width
+            # y = (avgy - self._height/2)*self._yfov/self._height
 
-            side1 = self.distance(corners[0][0][0][0], corners[0][0][0][1],
-                             corners[0][0][1][0], corners[0][0][1][1])
-            side2 = self.distance(corners[0][0][0][0], corners[0][0][0][1],
-                             corners[0][0][2][0], corners[0][0][2][1])
+            y = -((avgx - self._width/2)*self._xfov/self._width)
+            x = (avgy - self._height/2)*self._yfov/self._height
+
+
+            side1 = self.distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][1][0], corners[0][0][1][1])
+
+            side2 = self.distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][2][0], corners[0][0][2][1])
     	    area = side1 * side2
 
-            if self._template_H is .07:
-                z = 4201.1 * (area ** -0.496)
+            if self._template_H == .07:
+                z = (4201.1 * (area ** (-0.496)))
             else:
-                z = 12632 * (area ** -0.502)
+                z = (12632 * (area ** -(0.502)))
+
+	    z = z/100
 
             data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found': True}
             return data
@@ -217,7 +229,8 @@ def output_cb(arg1=None):
     print arg1
 
 if __name__ == '__main__':
-    timeout = 5
+    print "hey"	 
+    timeout = 3
     
     pub.subscribe(output_cb, 'sensor-messages.landingcam-data')
     landing_cam = LandingCamera()

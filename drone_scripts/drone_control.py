@@ -105,10 +105,10 @@ class FlaskServer(threading.Thread):
         '''Send an acknowledgement to whoever sent the request.'''
         print 'entered flask ack function'
         return 'ack'
-        
+
     @app.route('/find_target_and_land', methods=['POST'])
     def find_target_and_land_func():
-        '''Publish the target location and (optional) target symbols to the 
+        '''Publish the target location and (optional) target symbols to the
            find_target_and_land topic.'''
         print 'entered flask find_target_and_land function'
         target_info = json.loads(request.data)
@@ -299,11 +299,12 @@ class LoggerDaemon(threading.Thread):
                     and location_global.lon
                     and location_global.alt
                     and current_time):
-                                        
+
+                # FIX? formating went wrong during logging
                 logging.info('\'gps\', \'lat\':%3.6f, \'lon\':%3.6f,' + \
                              ' \'alt\':%3.6f, \'time\':%3.6f' \
                              % (location_global.lat, location_global.lon,
-                                location_global.alt, current_time))    
+                                location_global.alt, current_time))
 
             time.sleep(1)
 
@@ -359,7 +360,6 @@ class Pilot(object):
 
         self.vehicle = None
         self.sitl = None
-        hardware.LandingCamera(simulated=simulated_landing_camera)
 
         LoggerDaemon(self, 'Beta')
 
@@ -695,8 +695,8 @@ class Navigator(object):
         gps_lat = arg1['gps_lat']
         gps_lon = arg1['gps_lon']
         target = arg1['target']
-        
-        self.find_target_and_land(gps_lat, gps_lon, target)
+
+        self.find_target_and_land_drone(gps_lat, gps_lon, target)
 
 
     def RTL_cb(self, arg1=None):
@@ -715,10 +715,10 @@ class Navigator(object):
         '''Instantiate a pilot object and store it.'''
         if not self.simulated:
             self.bringup_ip = 'udp:127.0.0.1:14550'
+	    #self.bringup_ip = 'tcp:127.0.0.1:57600'
         self.pilot = Pilot(
                 simulated=self.simulated,
-                simulated_RF_sensor=self.simulated_RF_sensor,
-                simulated_air_sensor=self.simulated_air_sensor,
+                simulated_landing_camera=self.simulated_landing_camera,
         )
         print('Bringup ip: ')
         print(self.bringup_ip)
@@ -861,7 +861,7 @@ class Navigator(object):
                                 # 9: Abort
 
         # Fly to target waypoint
-        alt_rel = 10
+        alt_rel = 3
         waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
         self.pilot.goto_waypoint(waypoint_target, speed=70)
 
@@ -878,60 +878,67 @@ class Navigator(object):
         time_start = time.time()
         while(1):
             if (self.target_found == True):
-                self.vehicle.mode = VehicleMode('LAND')
-                self.vehicle.parameters['LAND_SPEED'] = 50
-                self.vehicle.parameters['PLND_ENABLED'] = 1
-                self.vehicle.parameters['PLND_TYPE'] = 1
+                self.pilot.vehicle.mode = VehicleMode('LAND')
+                self.pilot.vehicle.parameters['LAND_SPEED'] = 50
+                self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
+                self.pilot.vehicle.parameters['PLND_TYPE'] = 1
                 break
             time_elapsed = time.time() - time_start
             if (time_elapsed >= timeout):
                 self.landing_state = 9  # 9: Abort
                 print ('Target not found in %d seconds' % timeout)
                 break
+	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
+		        self.landing_state = 9
+		        break
             time.sleep(0.5) # TODO Can adjust if different responsiveness is
                             # required
 
         timeout = 5     # timeout of 5 seconds
         while (self.landing_state in [2,3,4]):
             if (self.target_found == False):
-                if (self.vehicle.mode == VehicleMode('LAND')):
-                    self.vehicle.mode = VehicleMode('GUIDED')
+                if (self.pilot.vehicle.mode == VehicleMode('LAND')):
+                    self.pilot.vehicle.mode = VehicleMode('GUIDED')
                     time_start = time.time()
                     print ('Target lost. Switch to GUIDED.')
                 elif ((time.time() - time_start) > timeout) :
                     self.landing_state = 9  # 9: Abort
-                    self.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
+                    #self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                         # controlled fly to waypoint
                                                         # and land
                     print ('Target lost for %d seconds during landing' % timeout)
                     break
             else:
-                if (self.vehicle.mode == VehicleMode('GUIDED')):
-                    self.vehicle.mode = VehicleMode('LAND')
-            time.sleep(0.1)
+                if (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
+                    self.pilot.vehicle.mode = VehicleMode('LAND')
+
+	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
+		        self.landing_state = 9
+		        break
+	        time.sleep(0.1)
 
         if (self.landing_state == 9):
             print ('Return to home')
-            self.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
+            self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                     # controlled fly to waypoint
                                                     # and land
         elif (self.landing_state == 5):
             print ('Landed successfully')
             # TODO Transfer info, add signpost garble here
         else:
-            print ('ERROR')
-            
+            print ('ERROR, landing_state is: ' + self.landing_state)
+
 
         # Either landed or aborted, but stop landing camera
         self.hw_landing_cam.stop()
-        
+
 
     def landing_adjustment_cb(self, arg1=None):
-        if self.vehicle.armed is False:
+        if self.pilot.vehicle.armed is False:
             self.landing_state = 5
         else:
             if arg1['found'] is True:
-                self.pilot.send_land_message(arg1['xoffset'], arg1['yoffset'], 
+                self.pilot.send_land_message(arg1['xoffset'], arg1['yoffset'],
                                              arg1['distance'])
                 self.target_found = True
                 if arg1['distance'] <= 1.5:
