@@ -182,7 +182,7 @@ class DroneCoordinator(object):
         """Send a landing target for the find_target_and_land mission to the 
            primary drone."""
         url = self.make_url(self.primary_drone_addr, 'find_target_and_land')
-        target_info = {'gps_lat':gps_lat, 'gps_lon':gps_lon, 'target':target}
+        target_info = json.dumps({'gps_lat':gps_lat, 'gps_lon':gps_lon, 'target':target})
         r = requests.post(url, target_info)
         
         return r
@@ -231,12 +231,12 @@ class DroneCoordinator(object):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('primary_ip')
-    args = parser.parse_args()
+    #parser = argparse.ArgumentParser()
+    #parser.add_argument('primary_ip')
+    #args = parser.parse_args()
 
-    dc = DroneCoordinator(args.primary_ip)
+    dc = DroneCoordinator('192.168.43.162') #args.primary_ip)
 
-    dc.launch_drone(dc.primary_drone_addr)
+    #dc.launch_drone(dc.primary_drone_addr)
     
     interact(local=locals())

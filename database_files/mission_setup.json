@@ -3,13 +3,10 @@
     "location":"RegentsPark",
     "drones": [
         {
-            "name": "Alpha",
-            "sensors": ["air1", "GPS1", "RF1", "SDR1"]
-        },
-        {
-            "name": "Beta",
-            "sensors": ["air2", "GPS2", "RF2", "SDR2"]
+            "name": "Goose",
+            "sensors": ["picamera1"]
         }
+
     ]
 }
 
