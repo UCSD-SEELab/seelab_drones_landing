@@ -48,24 +48,33 @@ class LandingCamera(threading.Thread):
 
 
     def run(self):
+        take_pic_cnt = 0
+        take_pic_time = 10  #picture every 10 runs, approx one per second
         while not(self.stopped()):
             self._take_pic()
             results = self._find_target(self._rawCapt.array)
             if (results['found'] == True):
+                path = str(os.getcwd()) + '/Found' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target found")
                 self._callback(results)
-	#	path = str(os.getcwd()) + '/Found' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
             else:
-	#   	path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+	   	        path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target not found")
-        #   cv2.imwrite(path, self._rawCapt.array)
+            if ((take_pic_cnt++) == take_pic_time):
+                cv2.imwrite(path, self._rawCapt.array)
+                take_pic_cnt = 0
             time.sleep(0.1)
 
         self._camera.close()
 
+    def get_cpu_usage(self):
+        p = psutil.Process(os.getpid())
+        print ("Process " + p)
+        print ("Running on CPU's: " + p.cpu_num())  #what cpu this process is currently running on
+        print ("Taking total CPU percentage: " + p.cpu_percent(interval = 1)) #CPU utilization as a percentage in interval
+                                                                              #returned percentage is not evenly split between CPUs
+
     def stop(self):
-        #path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-        #cv2.imwrite(path, self._rawCapt)
         self._stop_event.set()
 
 
@@ -104,7 +113,7 @@ class LandingCamera(threading.Thread):
 	    # adjusting for camera rotation
 	    # actual x (North) is y
 	    # actual y (East) is -x
-	    # following commented out is without adjusting			
+	    # following commented out is without adjusting
             # x = (avgx - self._width/2)*self._xfov/self._width
             # y = (avgy - self._height/2)*self._yfov/self._height
 
@@ -118,11 +127,9 @@ class LandingCamera(threading.Thread):
     	    area = side1 * side2
 
             if self._template_H == .07:
-                z = (4201.1 * (area ** (-0.496)))
+                z = (4201.1 * (area ** (-0.496)))/100
             else:
-                z = (12632 * (area ** -(0.502)))
-
-	    z = z/100
+                z = (12632 * (area ** -(0.502)))/100
 
             data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found': True}
             return data
@@ -229,13 +236,13 @@ def output_cb(arg1=None):
     print arg1
 
 if __name__ == '__main__':
-    print "hey"	 
+    print "hey"
     timeout = 3
-    
+
     pub.subscribe(output_cb, 'sensor-messages.landingcam-data')
     landing_cam = LandingCamera()
-    
+
     for _ in xrange(timeout):
         time.sleep(1)
-    
+
     landing_cam.stop()
