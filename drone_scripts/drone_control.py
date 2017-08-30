@@ -299,10 +299,7 @@ class LoggerDaemon(threading.Thread):
                     and location_global.lon
                     and location_global.alt
                     and current_time):
-
-                # FIX? formating went wrong during logging
-                logging.info('\'gps\', \'lat\':%3.6f, \'lon\':%3.6f,' + \
-                             ' \'alt\':%3.6f, \'time\':%3.6f' \
+                logging.info('\'gps\', \'lat\':%0.8f, \'lon\':%0.8f, \'alt\':%0.3f, \'time\':%0.2f' \
                              % (location_global.lat, location_global.lon,
                                 location_global.alt, current_time))
 
