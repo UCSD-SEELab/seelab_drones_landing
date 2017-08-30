@@ -876,7 +876,7 @@ class Navigator(object):
         while(1):
             if (self.target_found == True):
                 self.pilot.vehicle.mode = VehicleMode('LAND')
-                self.pilot.vehicle.parameters['LAND_SPEED'] = 50
+                self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
                 self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
                 self.pilot.vehicle.parameters['PLND_TYPE'] = 1
                 break
