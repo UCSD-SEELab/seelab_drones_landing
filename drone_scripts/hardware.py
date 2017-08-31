@@ -37,8 +37,8 @@ class LandingCamera(threading.Thread):
         self._camera = PiCamera()
         self._camera.resolution = (self._width, self._height)
         self._camera.framerate = 30
-        self._camera.shutter_speed = 1100
-        self._camera.ISO = 800
+        self._camera.shutter_speed = 0
+        self._camera.ISO = 0
         self._camera.meter_mode = 'matrix'
         self._rawCapt = PiRGBArray(self._camera, size = (self._width, self._height))
         self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
@@ -58,22 +58,22 @@ class LandingCamera(threading.Thread):
                 print ("Target found")
                 self._callback(results)
             else:
-	   	        path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target not found")
-            if ((take_pic_cnt++) == take_pic_time):
+            
+            take_pic_cnt += 1
+            if (take_pic_cnt == take_pic_time):
                 cv2.imwrite(path, self._rawCapt.array)
                 take_pic_cnt = 0
             time.sleep(0.1)
 
         self._camera.close()
 
-    def get_cpu_usage(self):
-        p = psutil.Process(os.getpid())
-        print ("Process " + p)
-        print ("Running on CPU's: " + p.cpu_num())  #what cpu this process is currently running on
-        print ("Taking total CPU percentage: " + p.cpu_percent(interval = 1)) #CPU utilization as a percentage in interval
-                                                                              #returned percentage is not evenly split between CPUs
 
+    def get_proc_id(self):
+        return os.getpid()
+    
+    
     def stop(self):
         self._stop_event.set()
 
@@ -241,6 +241,7 @@ if __name__ == '__main__':
 
     pub.subscribe(output_cb, 'sensor-messages.landingcam-data')
     landing_cam = LandingCamera()
+    
 
     for _ in xrange(timeout):
         time.sleep(1)
