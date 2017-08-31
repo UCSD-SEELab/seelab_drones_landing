@@ -59,19 +59,11 @@ class LandingCamera(threading.Thread):
                 print ("Target found")
                 self._callback(results)
             else:
-<<<<<<< HEAD
 	   	        path = str(sys.path[0]) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target not found")
                 self._callback(results)
             take_pic_cnt = take_pic_cnt + 1;
             if ((take_pic_cnt) == take_pic_time):
-=======
-                path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                print ("Target not found")
-            
-            take_pic_cnt += 1
-            if (take_pic_cnt == take_pic_time):
->>>>>>> 603076622ed29becf2525247bd3449d5204b489a
                 cv2.imwrite(path, self._rawCapt.array)
                 take_pic_cnt = 0
             time.sleep(0.1)
@@ -81,8 +73,8 @@ class LandingCamera(threading.Thread):
 
     def get_proc_id(self):
         return os.getpid()
-    
-    
+
+
     def stop(self):
         self._stop_event.set()
 
@@ -250,7 +242,7 @@ if __name__ == '__main__':
 
     pub.subscribe(output_cb, 'sensor-messages.landingcam-data')
     landing_cam = LandingCamera()
-    
+
 
     for _ in xrange(timeout):
         time.sleep(1)
