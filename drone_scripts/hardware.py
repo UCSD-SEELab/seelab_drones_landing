@@ -59,7 +59,7 @@ class LandingCamera(threading.Thread):
                 print ("Target found")
                 self._callback(results)
             else:
-	   	        path = str(sys.path[0]) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                path = str(sys.path[0]) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target not found")
                 self._callback(results)
             take_pic_cnt = take_pic_cnt + 1;
