@@ -70,8 +70,12 @@ class LandingCamera(threading.Thread):
         self._camera.close()
 
 
-    def get_proc_id(self):
-        return os.getpid()
+    def get_proc_id(self, b_only_pid=False):
+        ''' Gets the class name and process id of the thread '''
+        if (b_only_pid == True):
+            return os.getpid()
+        else:
+            return {'name':self.__class__.__name__, 'pid':os.getpid()}
     
     
     def stop(self):

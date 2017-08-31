@@ -27,6 +27,7 @@ import time
 import hardware
 import logging
 import psutil
+import os
 from pubsub import pub
 from flask import Flask, request
 from collections import deque
@@ -124,6 +125,14 @@ class FlaskServer(threading.Thread):
         '''Start the flask server on the local ip and then start the thread.'''
         app.run('0.0.0.0')
 
+    
+    def get_proc_id(self, b_only_pid=False):
+        ''' Gets the class name and process id of the thread '''
+        if (b_only_pid == True):
+            return os.getpid()
+        else:
+            return {'name':self.__class__.__name__, 'pid':os.getpid()}
+            
 
 class LoggerDaemon(threading.Thread):
     '''Provide a class to receive logging data and store it in the database.
@@ -242,7 +251,6 @@ class LoggerDaemon(threading.Thread):
                      for (key,val) in arg1.iteritems()))
 
 
-
     def wifi_data_cb(self, arg1=None):
         '''Add incoming wifi data to log.'''
         #print 'wifi callback entered: {}'.format(arg1)
@@ -320,6 +328,14 @@ class LoggerDaemon(threading.Thread):
                                                           ram_usage_total.percent)
             
             time.sleep(1)
+
+    
+    def get_proc_id(self, b_only_pid=False):
+        ''' Gets the class name and process id of the thread '''
+        if (b_only_pid == True):
+            return os.getpid()
+        else:
+            return {'name':self.__class__.__name__, 'pid':os.getpid()}
 
 
     def run(self):
@@ -622,6 +638,14 @@ class Pilot(object):
     		0)	# size along y-axis
     	self.vehicle.send_mavlink(message)
     	self.vehicle.flush()
+
+    
+    def get_proc_id(self, b_only_pid=False):
+        ''' Gets the class name and process id of the thread '''
+        if (b_only_pid == True):
+            return os.getpid()
+        else:
+            return {'name':self.__class__.__name__, 'pid':os.getpid()}
 
 
 class Navigator(object):
@@ -977,3 +1001,12 @@ class Navigator(object):
                 self.target_found = False
                 print ("No landing message sent and landing state is: " +\
                        self.landing_state)
+
+    
+    
+    def get_proc_id(self, b_only_pid=False):
+        ''' Gets the class name and process id of the thread '''
+        if (b_only_pid == True):
+            return os.getpid()
+        else:
+            return {'name':self.__class__.__name__, 'pid':os.getpid()}
