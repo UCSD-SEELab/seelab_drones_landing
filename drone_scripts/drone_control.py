@@ -297,10 +297,10 @@ class LoggerDaemon(threading.Thread):
 
 
     def sys_recorder(self):
-        '''Record the drone's current GPS location and cpu/ram usage every 
+        '''Record the drone's current GPS location and cpu/ram usage every
            second.'''
         p = psutil.Process()
-        
+
         while not(self.stopped()):
             # GPS Data
             location_global = self._pilot.get_global_location()
@@ -313,20 +313,20 @@ class LoggerDaemon(threading.Thread):
                 logging.info('\'gps\', \'lat\':%0.8f, \'lon\':%0.8f, \'alt\':%0.3f, \'time\':%0.2f' \
                              % (location_global.lat, location_global.lon,
                                 location_global.alt, current_time))
-            
+                logging.info('Num of satellites: ' + self._pilot.vehicle.gps_0.satellites_visible + "Fix: " + self._pilot.vehicle.gps_0.fix_type)                    
             # System utilization
-            # TODO Add in process names and process ids to each thread that 
+            # TODO Add in process names and process ids to each thread that
             #      we want to monitor and create and maintain a list of threads
             #      to track
             cpu_usage_total = psutil.cpu_percent(interval=None, percpu=True)
             ram_usage_total = psutil.virtual_memory()
             cpu_usage_proc = p.cpu_percent(interval=None)
-            
+
             logging.info('\'sys_util\', \'cpu_total\': [' + ', '.join(map(str, cpu_usage_total)) + '], ' + \
                          '\'ram_total\': %0.2f, \'cpu_proc\': %0.2f' % (ram_usage_total.percent, cpu_usage_proc))
-            print 'CPU usage: %0.2f, ram usage: %0.2f' % (sum(cpu_usage_total)/float(len(cpu_usage_total)), 
+            print 'CPU usage: %0.2f, ram usage: %0.2f' % (sum(cpu_usage_total)/float(len(cpu_usage_total)),
                                                           ram_usage_total.percent)
-            
+
             time.sleep(1)
 
     
@@ -341,8 +341,8 @@ class LoggerDaemon(threading.Thread):
     def run(self):
         '''Start the thread object.'''
         self.sys_recorder()
-    
-    
+
+
     def stop(self):
         ''' Call to safely stop the thread'''
         self._stop_event.set()
@@ -588,7 +588,7 @@ class Pilot(object):
         #TODO: May want to replace simple_goto with something better
         self.vehicle.simple_goto(global_relative, groundspeed=self.groundspeed)
         good_count = 0  # Count that we're actually at the waypoint for a few times in a row
-        while self.vehicle.mode.name == 'GUIDED' and good_count < 5:
+        while self.vehicle.mode.name == 'GUIDED' and good_count < 3:
             grf = self.vehicle.location.global_relative_frame
             offset = get_ground_distance(grf, global_relative)
             alt_offset = abs(grf.alt - global_relative.alt)
@@ -636,6 +636,7 @@ class Pilot(object):
     		z,	# distance to the target from vehicle in meters
     		0,	# size of target in radians along x-axis
     		0)	# size along y-axis
+        logging.info("x offset: " + x + ", y offset: " + y + ", distance: " + z)
     	self.vehicle.send_mavlink(message)
     	self.vehicle.flush()
 
@@ -893,11 +894,21 @@ class Navigator(object):
         self.pilot.land_drone()
 
 
+    def get_proc_id(self, b_only_pid=False):
+        ''' Gets the class name and process id of the thread '''
+        if (b_only_pid == True):
+            return os.getpid()
+        else:
+            return {'name':self.__class__.__name__, 'pid':os.getpid()}
+
+
     def find_target_and_land_drone(self, gps_lat, gps_lon, target=None):
-        ''' Searches for a target at the provided GPS coordinates and then 
+        ''' Searches for a target at the provided GPS coordinates and then
             attempts to land on the target. '''
         print 'Searching for target'
 
+        logging.info('Going to target' + 'lat: %3.6f, lon: %3.6f' % (gps_lat, gps_lon))
+        logging.info('With GPS info: ' + self.pilot.vehicle.gps_0)
         self.target_found = False
         self.landing_state = 0  # TODO Change to enumerated value
                                 # 0: Take off and head to target
@@ -911,30 +922,37 @@ class Navigator(object):
         # Fly to target waypoint
         alt_rel = 3
         waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
-        self.pilot.goto_waypoint(waypoint_target, speed=70)
+        self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=70)
 
         # Search until either target is found or a timeout is reached
         print 'Arrived at GPS target'
+        logging.info('Arrived at GPS target')
+
         self.landing_state = 1  # 1: At target GPS location, no sighting
 
         # Initialize landing camera hardware and subscription
         self.hw_landing_cam = hardware.LandingCamera()
         pub.subscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
+        print 'Subscribed'
 
         # TODO Add movement during initial search
         timeout = 10    # 10 seconds
         time_start = time.time()
+        print 'Start search for target'
         while(1):
             if (self.target_found == True):
                 self.pilot.vehicle.mode = VehicleMode('LAND')
                 self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
                 self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
                 self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+                print 'Found target, start landing'
+                logging.info('Found target, start landing')
                 break
             time_elapsed = time.time() - time_start
             if (time_elapsed >= timeout):
                 self.landing_state = 9  # 9: Abort
                 print ('Target not found in %d seconds' % timeout)
+                logging.info('Target not found in %d seconds' % timeout)
                 break
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
 		        self.landing_state = 9
@@ -943,8 +961,10 @@ class Navigator(object):
                             # required
 
         timeout = 5     # timeout of 5 seconds
+        'Start landing'
         while (self.landing_state in [2,3,4]):
             if (self.target_found == False):
+                logging.info('Target lost')
                 if (self.pilot.vehicle.mode == VehicleMode('LAND')):
                     self.pilot.vehicle.mode = VehicleMode('GUIDED')
                     time_start = time.time()
@@ -959,6 +979,8 @@ class Navigator(object):
             else:
                 if (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
                     self.pilot.vehicle.mode = VehicleMode('LAND')
+                    print ('Landing')
+                    logging.info('Landing')
 
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
 		        self.landing_state = 9
@@ -967,11 +989,13 @@ class Navigator(object):
 
         if (self.landing_state == 9):
             print ('Return to home')
+            logging.info('Return to home')
             self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                     # controlled fly to waypoint
                                                     # and land
         elif (self.landing_state == 5):
             print ('Landed successfully')
+            logging.info('Landed!')
             # TODO Transfer info, add signpost garble here
         else:
             print ('ERROR, landing_state is: ' + self.landing_state)
@@ -997,16 +1021,12 @@ class Navigator(object):
                     self.landing_state = 2
                 print ("Landing message sent and landing state adjusted to: "+\
                        self.landing_state)
+                logging.info("Landing message sent and landing state adjusted to: "+\
+                       self.landing_state)
             else:
                 self.target_found = False
                 print ("No landing message sent and landing state is: " +\
                        self.landing_state)
-
-    
-    
-    def get_proc_id(self, b_only_pid=False):
-        ''' Gets the class name and process id of the thread '''
-        if (b_only_pid == True):
-            return os.getpid()
-        else:
-            return {'name':self.__class__.__name__, 'pid':os.getpid()}
+                       
+                logging.info("No landing message sent and landing state is: "+\
+                       self.landing_state)

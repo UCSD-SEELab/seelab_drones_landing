@@ -21,6 +21,7 @@ import cv2.aruco as aruco
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import os
+import sys
 from time import localtime, strftime
 
 class LandingCamera(threading.Thread):
@@ -54,15 +55,15 @@ class LandingCamera(threading.Thread):
             self._take_pic()
             results = self._find_target(self._rawCapt.array)
             if (results['found'] == True):
-                path = str(os.getcwd()) + '/Found' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                path = str(sys.path[0]) + '/Found' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target found")
                 self._callback(results)
             else:
-                path = str(os.getcwd()) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+	   	        path = str(sys.path[0]) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Target not found")
-            
-            take_pic_cnt += 1
-            if (take_pic_cnt == take_pic_time):
+                self._callback(results)
+            take_pic_cnt = take_pic_cnt + 1;
+            if ((take_pic_cnt) == take_pic_time):
                 cv2.imwrite(path, self._rawCapt.array)
                 take_pic_cnt = 0
             time.sleep(0.1)
@@ -76,8 +77,8 @@ class LandingCamera(threading.Thread):
             return os.getpid()
         else:
             return {'name':self.__class__.__name__, 'pid':os.getpid()}
-    
-    
+
+
     def stop(self):
         self._stop_event.set()
 
@@ -245,7 +246,7 @@ if __name__ == '__main__':
 
     pub.subscribe(output_cb, 'sensor-messages.landingcam-data')
     landing_cam = LandingCamera()
-    
+
 
     for _ in xrange(timeout):
         time.sleep(1)
