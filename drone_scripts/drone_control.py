@@ -26,6 +26,7 @@ import tempfile
 import time
 import hardware
 import logging
+import psutil
 from pubsub import pub
 from flask import Flask, request
 from collections import deque
@@ -160,6 +161,8 @@ class LoggerDaemon(threading.Thread):
         self.read_config(config_file, drone_name)
         self.setup_logging()
         self.setup_subs()
+        self._stop_event = threading.Event()
+        self._stop_event.clear() # Unnecessary
         self.start()
 
 
@@ -285,13 +288,13 @@ class LoggerDaemon(threading.Thread):
         return json.dumps({'relative':[north, east]})
 
 
-    def GPS_recorder(self):
-        '''Record the drone's current GPS location every second.'''
-        # Something better than while True? Thread is already a daemon I guess
-        #TODO: I found a bug where if the home gps coordinates get messed up
-        # data won't be logged. Maybe add some safety when calling
-        # rel_from_glob as it happens there. -Stephen
-        while True:
+    def sys_recorder(self):
+        '''Record the drone's current GPS location and cpu/ram usage every 
+           second.'''
+        p = psutil.Process()
+        
+        while not(self.stopped()):
+            # GPS Data
             location_global = self._pilot.get_global_location()
             current_time = self.mission_time()
             if (location_global
@@ -302,13 +305,36 @@ class LoggerDaemon(threading.Thread):
                 logging.info('\'gps\', \'lat\':%0.8f, \'lon\':%0.8f, \'alt\':%0.3f, \'time\':%0.2f' \
                              % (location_global.lat, location_global.lon,
                                 location_global.alt, current_time))
-
+            
+            # System utilization
+            # TODO Add in process names and process ids to each thread that 
+            #      we want to monitor and create and maintain a list of threads
+            #      to track
+            cpu_usage_total = psutil.cpu_percent(interval=None, percpu=True)
+            ram_usage_total = psutil.virtual_memory()
+            cpu_usage_proc = p.cpu_percent(interval=None)
+            
+            logging.info('\'sys_util\', \'cpu_total\': [' + ', '.join(map(str, cpu_usage_total)) + '], ' + \
+                         '\'ram_total\': %0.2f, \'cpu_proc\': %0.2f' % (ram_usage_total.percent, cpu_usage_proc))
+            print 'CPU usage: %0.2f, ram usage: %0.2f' % (sum(cpu_usage_total)/float(len(cpu_usage_total)), 
+                                                          ram_usage_total.percent)
+            
             time.sleep(1)
 
 
     def run(self):
         '''Start the thread object.'''
-        self.GPS_recorder()
+        self.sys_recorder()
+    
+    
+    def stop(self):
+        ''' Call to safely stop the thread'''
+        self._stop_event.set()
+
+
+    def stopped(self):
+        ''' Check if thread is stopped or running '''
+        return self._stop_event.is_set()
 
 
 class Pilot(object):
@@ -844,7 +870,8 @@ class Navigator(object):
 
 
     def find_target_and_land_drone(self, gps_lat, gps_lon, target=None):
-        ''' Explanation of function '''
+        ''' Searches for a target at the provided GPS coordinates and then 
+            attempts to land on the target. '''
         print 'Searching for target'
 
         self.target_found = False
