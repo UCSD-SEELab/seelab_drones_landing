@@ -247,8 +247,9 @@ class LoggerDaemon(threading.Thread):
         print 'entered mission_data_cb'
         # event_dict = copy.deepcopy(arg1)
         # event_json = event_dict
-        logging.info('\'mission_data\', ' + ', '.join('\'%s\':%r' % (key,val) \
-                     for (key,val) in arg1.iteritems()))
+        # TODO Decide if it should be handled here or in landing_msg_cb in navigator
+        #logging.info('\'mission_data\', ' + ', '.join('\'%s\':%r' % (key,val) \
+        #             for (key,val) in arg1.iteritems()))
 
 
     def wifi_data_cb(self, arg1=None):
@@ -313,7 +314,12 @@ class LoggerDaemon(threading.Thread):
                 logging.info('\'gps\', \'lat\':%0.8f, \'lon\':%0.8f, \'alt\':%0.3f, \'time\':%0.2f' \
                              % (location_global.lat, location_global.lon,
                                 location_global.alt, current_time))
-                logging.info('Num of satellites: ' + self._pilot.vehicle.gps_0.satellites_visible + "Fix: " + self._pilot.vehicle.gps_0.fix_type)                    
+                gps_info= {'eph': self._pilot.vehicle.gps_0.eph, 
+                           'epv':self._pilot.vehicle.gps_0.epv,
+                           'fix': self._pilot.vehicle.gps_0.fix_type,
+                           'num_sats': self._pilot.vehicle.gps_0.satellites_visible}
+                logging.info('\'gps_info\', ' + str(gps_info).strip('{}'))     
+                
             # System utilization
             # TODO Add in process names and process ids to each thread that
             #      we want to monitor and create and maintain a list of threads
@@ -907,8 +913,8 @@ class Navigator(object):
             attempts to land on the target. '''
         print 'Searching for target'
 
-        logging.info('Going to target' + 'lat: %3.6f, lon: %3.6f' % (gps_lat, gps_lon))
-        logging.info('With GPS info: ' + self.pilot.vehicle.gps_0)
+        logging.info('\'find_target_and_land_drone\', \'lat\': %3.6f, \'lon\': %3.6f' % (gps_lat, gps_lon))
+        
         self.target_found = False
         self.landing_state = 0  # TODO Change to enumerated value
                                 # 0: Take off and head to target
@@ -920,13 +926,17 @@ class Navigator(object):
                                 # 9: Abort
 
         # Fly to target waypoint
+        alt_rel = 5
+        waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
+        self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=100)
+        
         alt_rel = 3
         waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
-        self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=70)
+        self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=50)
 
         # Search until either target is found or a timeout is reached
         print 'Arrived at GPS target'
-        logging.info('Arrived at GPS target')
+        logging.info('\'find_target_and_land_drone\', Arrived at GPS target')
 
         self.landing_state = 1  # 1: At target GPS location, no sighting
 
@@ -946,13 +956,13 @@ class Navigator(object):
                 self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
                 self.pilot.vehicle.parameters['PLND_TYPE'] = 1
                 print 'Found target, start landing'
-                logging.info('Found target, start landing')
+                logging.info('\'find_target_and_land_drone\', Found target and start landing')
                 break
             time_elapsed = time.time() - time_start
             if (time_elapsed >= timeout):
                 self.landing_state = 9  # 9: Abort
                 print ('Target not found in %d seconds' % timeout)
-                logging.info('Target not found in %d seconds' % timeout)
+                logging.info('\'find_target_and_land_drone\', Target not found in %d seconds' % timeout)
                 break
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
 		        self.landing_state = 9
@@ -964,23 +974,24 @@ class Navigator(object):
         'Start landing'
         while (self.landing_state in [2,3,4]):
             if (self.target_found == False):
-                logging.info('Target lost')
                 if (self.pilot.vehicle.mode == VehicleMode('LAND')):
                     self.pilot.vehicle.mode = VehicleMode('GUIDED')
                     time_start = time.time()
                     print ('Target lost. Switch to GUIDED.')
+                    logging.info('\'find_target_and_land_drone\', Target lost. Mode set to GUIDED.')
                 elif ((time.time() - time_start) > timeout) :
                     self.landing_state = 9  # 9: Abort
                     #self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                         # controlled fly to waypoint
                                                         # and land
                     print ('Target lost for %d seconds during landing' % timeout)
+                    logging.info('\'find_target_and_land_drone\', Target lost for %d seconds during landing. Mission aborted.')
                     break
             else:
                 if (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
                     self.pilot.vehicle.mode = VehicleMode('LAND')
                     print ('Landing')
-                    logging.info('Landing')
+                    logging.info('\'find_target_and_land_drone\', Target found. Switch to LAND.')
 
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
 		        self.landing_state = 9
@@ -989,13 +1000,13 @@ class Navigator(object):
 
         if (self.landing_state == 9):
             print ('Return to home')
-            logging.info('Return to home')
+            logging.info('\'find_target_and_land_drone\', Mission aborted. Return to home.')
             self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                     # controlled fly to waypoint
                                                     # and land
         elif (self.landing_state == 5):
             print ('Landed successfully')
-            logging.info('Landed!')
+            logging.info('\'find_target_and_land_drone\', Landed successfully')
             # TODO Transfer info, add signpost garble here
         else:
             print ('ERROR, landing_state is: ' + self.landing_state)
@@ -1021,12 +1032,11 @@ class Navigator(object):
                     self.landing_state = 2
                 print ("Landing message sent and landing state adjusted to: "+\
                        self.landing_state)
-                logging.info("Landing message sent and landing state adjusted to: "+\
-                       self.landing_state)
+                logging.info('\'landing_adjustment_cb\', \'msg_land\', ' + \
+                             str(arg1).strip('{}') + ', \'landing_state\': %d' % self.landing_state)
             else:
                 self.target_found = False
                 print ("No landing message sent and landing state is: " +\
                        self.landing_state)
-                       
-                logging.info("No landing message sent and landing state is: "+\
-                       self.landing_state)
+                logging.info('\'landing_adjustment_cb\', \'msg_land\', None' + \
+                             ', \'landing_state\': %d' % self.landing_state)
