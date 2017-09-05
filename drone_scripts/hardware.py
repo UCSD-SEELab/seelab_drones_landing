@@ -50,7 +50,7 @@ class LandingCamera(threading.Thread):
 
     def run(self):
         take_pic_cnt = 0
-        take_pic_time = 10  #picture every 10 runs, approx one per second
+        take_pic_time = 5  #picture every 5 runs, approx one per 2 second
         while not(self.stopped()):
             self._take_pic()
             results = self._find_target(self._rawCapt.array)
