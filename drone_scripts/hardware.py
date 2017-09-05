@@ -31,8 +31,6 @@ class LandingCamera(threading.Thread):
         #self.daemon = True
         self._width = 640
         self._height = 480
-        self._template_L = .07
-        self._template_H = .07
         self._xfov = 62.2 * math.pi/180
         self._yfov = 48.8 * math.pi/180
         self._camera = PiCamera()
@@ -102,13 +100,34 @@ class LandingCamera(threading.Thread):
 
     def _find_target(self, pic):
         corners, ids, rejects = aruco.detectMarkers(pic, self._aruco_dic)
+        self._rawCapt.array = aruco.drawDetectedMarkers(pic, corners, ids)
+        
+        numMarkers = len(corners)
 
-        if len(corners) is not 0:
-            print("Corners found")
+        if numMarkers == 1:
+            if ids[0][0] is 100:
+                print ("Found ID 100: use big target")
+                data = calculate_xyz(corners[0][0], 0.20)
+
+            else:
+                print ("Found ID 101: use small target")
+                data = calculate_xyz(corners[0][0], 0.07)
+
+        elif numMarkers == 2:
+            print ("Found both: use small target")
+            data = calculate_xyz(corners[1][0], 0.07)
+
+        else:
+            print("Corners not found")
+            data = {'xoffset': -1, 'yoffset': -1, 'distance': -1, 'found':False}
+
+        return data
+
+    def calculate_xyz(corners, size):
             sumx = 0
     	    sumy = 0
 
-    	    for x in corners[0][0]:
+    	    for x in corners:
     		    sumx = sumx + x[0]
     		    sumy = sumy + x[1]
 
@@ -126,12 +145,12 @@ class LandingCamera(threading.Thread):
             x = (avgy - self._height/2)*self._yfov/self._height
 
 
-            side1 = self.distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][1][0], corners[0][0][1][1])
+            side1 = self.distance(corners[0][0], corners[0][1], corners[1][0], corners[1][1])
 
-            side2 = self.distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][2][0], corners[0][0][2][1])
+            side2 = self.distance(corners[0][0], corners[0][1], corners[2][0], corners[2][1])
     	    area = side1 * side2
 
-            if self._template_H == .07:
+            if size == .07:
                 z = (4201.1 * (area ** (-0.496)))/100
             else:
                 z = (12632 * (area ** -(0.502)))/100
