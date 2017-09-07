@@ -104,15 +104,21 @@ class LandingCamera(threading.Thread):
         
         numMarkers = len(corners)
 
+        # TODO Fix to catch error cases
         if numMarkers == 1:
-            if ids[0][0] is 100:
+            if (ids[0][0] == 100):
                 print ("Found ID 100: use big target")
                 data = self.calculate_xyz(corners[0][0], 0.20)
 
-            else:
+            elif (ids[0][0] == 101):
                 print ("Found ID 101: use small target")
                 data = self.calculate_xyz(corners[0][0], 0.07)
+                
+            else:
+                print ("Found ID %d: revert to small target" % ids[0][0])
+                data = self.calculate_xyz(corners[0][0], 0.07)
 
+        # TODO Will the smaller marker always come second in the list?
         elif numMarkers == 2:
             print ("Found both: use small target")
             data = self.calculate_xyz(corners[1][0], 0.07)
@@ -123,18 +129,19 @@ class LandingCamera(threading.Thread):
 
         return data
 
+
     def calculate_xyz(self, corners, size):
         sumx = 0
         sumy = 0
 
-        for x in corners:
-            sumx = sumx + x[0]
-            sumy = sumy + x[1]
+        for pos in corners:
+            sumx = sumx + pos[0]
+            sumy = sumy + pos[1]
 
         avgx = sumx/4
         avgy = sumy/4
 
-	    # adjusting for camera rotation
+	    # Adjusting for camera rotation
 	    # actual x (North) is y
 	    # actual y (East) is -x
 	    # following commented out is without adjusting
@@ -144,9 +151,8 @@ class LandingCamera(threading.Thread):
         y = -((avgx - self._width/2)*self._xfov/self._width)
         x = (avgy - self._height/2)*self._yfov/self._height
 
-
+        # TODO Update with more accurate way to calculate distance
         side1 = self.distance(corners[0][0], corners[0][1], corners[1][0], corners[1][1])
-
         side2 = self.distance(corners[0][0], corners[0][1], corners[2][0], corners[2][1])
         area = side1 * side2
 

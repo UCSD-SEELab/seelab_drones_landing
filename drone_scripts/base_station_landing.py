@@ -179,15 +179,54 @@ class DroneCoordinator(object):
         return r
 
 
-    def send_landing_target_mission(self, gps_lat, gps_lon, target=None):
+    def send_landing_target_mission(self, target=None):
         """Send a landing target for the find_target_and_land mission to the 
            primary drone."""
         url = self.make_url(self.primary_drone_addr, 'find_target_and_land')
-        target_info = json.dumps({'gps_lat':gps_lat, 'gps_lon':gps_lon, 'target':target})
+        target_info = json.dumps({'target':target})
         r = requests.post(url, target_info)
         
         return r
     
+
+    def create_find_target_and_land_mission(self, gps_lat, gps_lon, target=None):
+        """Create a mission (JSON string) for going to a waypoint and then
+        initializing the find_target_and_land mission and return it.
+        """
+        mission_dict = { 
+            'points': {
+                'target_loc_hi': {
+                    'lat': gps_lat,
+                    'lon': gps_lon,
+                    'alt': 5,
+                },
+                'target_loc_lo': {
+                    'lat': gps_lat,
+                    'lon': gps_lon,
+                    'alt': 3,
+                },
+            },
+            'plan': [
+                {
+                    'action': 'go',
+                    'points': ['target_loc_hi'],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'go',
+                    'points': ['target_loc_lo'],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'find_target_and_land_drone',
+                    'points': [],
+                    'target': target,
+                },
+            ],
+        }
+        
+        return mission_dict
+
 
     def create_point_mission(self, action, relative_point, name):
         """Create a mission (JSON string) and return it.

@@ -632,6 +632,7 @@ class Pilot(object):
         print 'Closing vehicle'
         self.vehicle.close()
 
+
     def send_land_message(self, x, y, z):
     	message = self.vehicle.message_factory.landing_target_encode(
     		0,	# ms since boot, a time stamp
@@ -642,7 +643,7 @@ class Pilot(object):
     		z,	# distance to the target from vehicle in meters
     		0,	# size of target in radians along x-axis
     		0)	# size along y-axis
-        logging.info("x offset: " + x + ", y offset: " + y + ", distance: " + z)
+        logging.info('\'send_land_message\', \'x offset\': %0.4f, \'y offset\': %0.4f, \'distance\': %0.4f' % (x, y, z))
     	self.vehicle.send_mavlink(message)
     	self.vehicle.flush()
 
@@ -721,6 +722,7 @@ class Navigator(object):
         pub.subscribe(self.RTL_cb, 'flask-messages.RTL')
         pub.subscribe(self.find_target_and_land_cb, 'flask-messages.find_target_and_land')
 
+
     def mission_cb(self, arg1=None):
         '''Add an incoming mission to the mission queue.'''
         print 'Navigator entered mission_cb'
@@ -745,12 +747,23 @@ class Navigator(object):
     def find_target_and_land_cb(self, arg1=None):
         '''Tell the pilot to find the target and land the drone'''
         print 'Navigator entered find target and land callback'
-
-        gps_lat = arg1['gps_lat']
-        gps_lon = arg1['gps_lon']
-        target = arg1['target']
-
-        self.find_target_and_land_drone(gps_lat, gps_lon, target)
+        mission = { 
+            'points': {
+                'home':{
+                    'N': 0,
+                    'E': 0,
+                    'D': 0,
+                }
+            },
+            'plan': [
+                {
+                    'action': 'find_target_and_land_drone',
+                    'points': [],
+                    'target': arg1,
+                },
+            ],
+        }
+        self.mission_queue.append(mission)
 
 
     def RTL_cb(self, arg1=None):
@@ -793,7 +806,14 @@ class Navigator(object):
     def parse_mission(self, mission_dict):
         '''Add GPS coordinates to all the points in a mission dictionary.'''
         for name, POI in mission_dict['points'].iteritems():
-            POI['GPS'] = self.meters_to_waypoint(POI)
+            if (all(keys in POI for keys in ['N', 'E', 'D'])):
+                POI['GPS'] = self.meters_to_waypoint(POI)
+            elif (all(keys in POI for keys in ['lat', 'lon', 'alt'])):
+                POI['GPS'] = LocationGlobalRelative(POI['lat'], POI['lon'],
+                                                    POI['alt'])
+            else:
+                print ('Error parsing POI of mission file')
+                
         return mission_dict
 
 
@@ -818,45 +838,42 @@ class Navigator(object):
         unparsed_mission -- a mission in the form of a dictionary, for example
                             from the FlaskServer.
         '''
-
         try:
-            if unparsed_mission['plan'][0]['action'] != 'launch':
-                mission = self.parse_mission(unparsed_mission)
-            else:
-                # look at the terrible thing I'm doing! :D
-                # ... D:
-                mission = unparsed_mission
-
+            mission = self.parse_mission(unparsed_mission)
             self.current_mission = mission
 
             for event in mission['plan']:
-               if mission['plan'][0]['action'] != 'launch' and (self.pilot.vehicle.mode != 'GUIDED'):
-	           print 'aborting mission due to check'
-                   self.mission_queue = deque([])
-                   return
+                if (mission['plan'][0]['action'] != 'launch') and (self.pilot.vehicle.mode != 'GUIDED'):
+                    print 'aborting mission due to check'
+                    self.mission_queue = deque([])
+                    return
 
-	       print 'mission executing action {}'.format(event['action'])
-               action = getattr(self, event['action'])
-               #publish event start
-               event_start_dict = {
-                       'task':event['action'],
-                       'action':'start',
-               }
-               pub.sendMessage(
-                       'nav-messages.mission-data',
-                       arg1=event_start_dict
-               )
-               #do the thing
-               action(event)
-               #publish event end
-               event_end_dict = {
-                       'task':event['action'],
-                       'action':'end',
-               }
-               pub.sendMessage(
-                       'nav-messages.mission-data',
-                       arg1=event_end_dict
-               )
+                print 'mission executing action {}'.format(event['action'])
+                action = getattr(self, event['action'])
+                
+                #publish event start
+                event_start_dict = {
+                    'task':event['action'],
+                    'action':'start',
+                }
+                pub.sendMessage(
+                    'nav-messages.mission-data',
+                    arg1=event_start_dict
+                )
+                
+                #do the thing
+                action(event)
+               
+                #publish event end
+                event_end_dict = {
+                    'task':event['action'],
+                    'action':'end',
+                }
+                pub.sendMessage(
+                    'nav-messages.mission-data',
+                    arg1=event_end_dict
+                )
+                
         except Exception as e:
             print 'Exception! RTL initiated', e
             self.pilot.RTL_and_land()
@@ -908,12 +925,14 @@ class Navigator(object):
             return {'name':self.__class__.__name__, 'pid':os.getpid()}
 
 
-    def find_target_and_land_drone(self, gps_lat, gps_lon, target=None):
-        ''' Searches for a target at the provided GPS coordinates and then
-            attempts to land on the target. '''
-        print 'Searching for target'
+    def find_target_and_land_drone(self, event):
+        ''' Searches for a target and then attempts to land on the target. '''
+        
+        if ('target' in event):
+            target = event['target']
+        else:
+            target = None
 
-        logging.info('\'find_target_and_land_drone\', \'lat\': %3.6f, \'lon\': %3.6f' % (gps_lat, gps_lon))
 
         self.target_found = False
         self.landing_state = 0  # TODO Change to enumerated value
@@ -925,30 +944,41 @@ class Navigator(object):
                                 # 5: Landing, on ground
                                 # 9: Abort
 
-        # Fly to target waypoint
-        alt_rel = 5
-        waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
-        self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=100)
-
-        alt_rel = 3
-        waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
-        self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=50)
-
         # Search until either target is found or a timeout is reached
-        print 'Arrived at GPS target'
-        logging.info('\'find_target_and_land_drone\', Arrived at GPS target')
-
         self.landing_state = 1  # 1: At target GPS location, no sighting
 
         # Initialize landing camera hardware and subscription
-        self.hw_landing_cam = hardware.LandingCamera()
+        self.hw_landing_cam = hardware.LandingCamera(target)
         pub.subscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
         print 'Subscribed'
 
-        # TODO Add movement during initial search
-        timeout = 30    # 30 seconds
-        time_start = time.time()
+        
         print 'Start search for target'
+
+        # TODO Add movement during initial search
+        # Michael: I think this will work. We can test when we need.
+        '''self.pilot.vehicle.parameters['CIRCLE_RADIUS'] = 300    # 300 cm radius
+        self.pilot.vehicle.parameters['CIRCLE_RATE'] = 15       # +15 deg/s CW
+        self.pilot.vehicle.mode = VehicleMode('CIRCLE')
+        
+        time_start = time.time()
+        timeout = 1     # 1 second to switch modes
+        while not(self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
+            time_elapsed = time.time() - time_start
+            if (time_elapsed >= timeout):
+                break
+            time.sleep(0.1)
+        
+        # If switch to CIRCLE was successful, let the circle run in AUTO mode. 
+        # Otherwise, revert back to stationary hold in GUIDED mode
+        if (self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
+            self.pilot.vehicle.mode = VehicleMode('AUTO')
+        else:
+            self.pilot.vehicle.mode = VehicleMode('GUIDED')
+        '''
+        
+        time_start = time.time()     
+        timeout = 30    # 30 seconds
         while(1):
             if (self.target_found == True):
                 self.pilot.vehicle.mode = VehicleMode('LAND')
@@ -1011,9 +1041,9 @@ class Navigator(object):
         else:
             print ('ERROR, landing_state is: ' + str(self.landing_state))
 
-
         # Either landed or aborted, but stop landing camera
         self.hw_landing_cam.stop()
+        pub.unsubscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
 
 
     def landing_adjustment_cb(self, arg1=None):
