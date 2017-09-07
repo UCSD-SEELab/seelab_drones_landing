@@ -125,14 +125,14 @@ class FlaskServer(threading.Thread):
         '''Start the flask server on the local ip and then start the thread.'''
         app.run('0.0.0.0')
 
-    
+
     def get_proc_id(self, b_only_pid=False):
         ''' Gets the class name and process id of the thread '''
         if (b_only_pid == True):
             return os.getpid()
         else:
             return {'name':self.__class__.__name__, 'pid':os.getpid()}
-            
+
 
 class LoggerDaemon(threading.Thread):
     '''Provide a class to receive logging data and store it in the database.
@@ -314,12 +314,12 @@ class LoggerDaemon(threading.Thread):
                 logging.info('\'gps\', \'lat\':%0.8f, \'lon\':%0.8f, \'alt\':%0.3f, \'time\':%0.2f' \
                              % (location_global.lat, location_global.lon,
                                 location_global.alt, current_time))
-                gps_info= {'eph': self._pilot.vehicle.gps_0.eph, 
+                gps_info= {'eph': self._pilot.vehicle.gps_0.eph,
                            'epv':self._pilot.vehicle.gps_0.epv,
                            'fix': self._pilot.vehicle.gps_0.fix_type,
                            'num_sats': self._pilot.vehicle.gps_0.satellites_visible}
-                logging.info('\'gps_info\', ' + str(gps_info).strip('{}'))     
-                
+                logging.info('\'gps_info\', ' + str(gps_info).strip('{}'))
+
             # System utilization
             # TODO Add in process names and process ids to each thread that
             #      we want to monitor and create and maintain a list of threads
@@ -335,7 +335,7 @@ class LoggerDaemon(threading.Thread):
 
             time.sleep(1)
 
-    
+
     def get_proc_id(self, b_only_pid=False):
         ''' Gets the class name and process id of the thread '''
         if (b_only_pid == True):
@@ -646,7 +646,7 @@ class Pilot(object):
     	self.vehicle.send_mavlink(message)
     	self.vehicle.flush()
 
-    
+
     def get_proc_id(self, b_only_pid=False):
         ''' Gets the class name and process id of the thread '''
         if (b_only_pid == True):
@@ -914,7 +914,7 @@ class Navigator(object):
         print 'Searching for target'
 
         logging.info('\'find_target_and_land_drone\', \'lat\': %3.6f, \'lon\': %3.6f' % (gps_lat, gps_lon))
-        
+
         self.target_found = False
         self.landing_state = 0  # TODO Change to enumerated value
                                 # 0: Take off and head to target
@@ -929,7 +929,7 @@ class Navigator(object):
         alt_rel = 5
         waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
         self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=100)
-        
+
         alt_rel = 3
         waypoint_target = LocationGlobalRelative(gps_lat, gps_lon, alt_rel)
         self.pilot.goto_waypoint(waypoint_target, ground_tol=1.2, speed=50)
@@ -946,7 +946,7 @@ class Navigator(object):
         print 'Subscribed'
 
         # TODO Add movement during initial search
-        timeout = 10    # 10 seconds
+        timeout = 30    # 30 seconds
         time_start = time.time()
         print 'Start search for target'
         while(1):
