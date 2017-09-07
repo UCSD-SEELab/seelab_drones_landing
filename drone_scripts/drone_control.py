@@ -330,8 +330,8 @@ class LoggerDaemon(threading.Thread):
 
             logging.info('\'sys_util\', \'cpu_total\': [' + ', '.join(map(str, cpu_usage_total)) + '], ' + \
                          '\'ram_total\': %0.2f, \'cpu_proc\': %0.2f' % (ram_usage_total.percent, cpu_usage_proc))
-            print 'CPU usage: %0.2f, ram usage: %0.2f' % (sum(cpu_usage_total)/float(len(cpu_usage_total)),
-                                                          ram_usage_total.percent)
+            #print 'CPU usage: %0.2f, ram usage: %0.2f' % (sum(cpu_usage_total)/float(len(cpu_usage_total)),
+            #                                              ram_usage_total.percent)
 
             time.sleep(1)
 
@@ -747,7 +747,7 @@ class Navigator(object):
     def find_target_and_land_cb(self, arg1=None):
         '''Tell the pilot to find the target and land the drone'''
         print 'Navigator entered find target and land callback'
-        mission = { 
+        mission = {
             'points': {
                 'home':{
                     'N': 0,
@@ -805,6 +805,9 @@ class Navigator(object):
 
     def parse_mission(self, mission_dict):
         '''Add GPS coordinates to all the points in a mission dictionary.'''
+        if (mission_dict['plan'][0]['action'] == 'launch'):
+            return mission_dict
+
         for name, POI in mission_dict['points'].iteritems():
             if (all(keys in POI for keys in ['N', 'E', 'D'])):
                 POI['GPS'] = self.meters_to_waypoint(POI)
@@ -813,7 +816,7 @@ class Navigator(object):
                                                     POI['alt'])
             else:
                 print ('Error parsing POI of mission file')
-                
+
         return mission_dict
 
 
@@ -850,7 +853,7 @@ class Navigator(object):
 
                 print 'mission executing action {}'.format(event['action'])
                 action = getattr(self, event['action'])
-                
+
                 #publish event start
                 event_start_dict = {
                     'task':event['action'],
@@ -860,10 +863,10 @@ class Navigator(object):
                     'nav-messages.mission-data',
                     arg1=event_start_dict
                 )
-                
+
                 #do the thing
                 action(event)
-               
+
                 #publish event end
                 event_end_dict = {
                     'task':event['action'],
@@ -873,7 +876,7 @@ class Navigator(object):
                     'nav-messages.mission-data',
                     arg1=event_end_dict
                 )
-                
+
         except Exception as e:
             print 'Exception! RTL initiated', e
             self.pilot.RTL_and_land()
@@ -927,7 +930,7 @@ class Navigator(object):
 
     def find_target_and_land_drone(self, event):
         ''' Searches for a target and then attempts to land on the target. '''
-        
+
         if ('target' in event):
             target = event['target']
         else:
@@ -952,7 +955,7 @@ class Navigator(object):
         pub.subscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
         print 'Subscribed'
 
-        
+
         print 'Start search for target'
 
         # TODO Add movement during initial search
@@ -960,7 +963,7 @@ class Navigator(object):
         '''self.pilot.vehicle.parameters['CIRCLE_RADIUS'] = 300    # 300 cm radius
         self.pilot.vehicle.parameters['CIRCLE_RATE'] = 15       # +15 deg/s CW
         self.pilot.vehicle.mode = VehicleMode('CIRCLE')
-        
+
         time_start = time.time()
         timeout = 1     # 1 second to switch modes
         while not(self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
@@ -968,16 +971,16 @@ class Navigator(object):
             if (time_elapsed >= timeout):
                 break
             time.sleep(0.1)
-        
-        # If switch to CIRCLE was successful, let the circle run in AUTO mode. 
+
+        # If switch to CIRCLE was successful, let the circle run in AUTO mode.
         # Otherwise, revert back to stationary hold in GUIDED mode
         if (self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
             self.pilot.vehicle.mode = VehicleMode('AUTO')
         else:
             self.pilot.vehicle.mode = VehicleMode('GUIDED')
         '''
-        
-        time_start = time.time()     
+
+        time_start = time.time()
         timeout = 30    # 30 seconds
         while(1):
             if (self.target_found == True):
@@ -1015,7 +1018,7 @@ class Navigator(object):
                                                         # controlled fly to waypoint
                                                         # and land
                     print ('Target lost for %d seconds during landing' % timeout)
-                    logging.info('\'find_target_and_land_drone\', Target lost for %d seconds during landing. Mission aborted.')
+                    logging.info('\'find_target_and_land_drone\', Target lost for %d seconds during landing. Mission aborted.' % timeout)
                     break
             else:
                 if (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
@@ -1031,6 +1034,8 @@ class Navigator(object):
         if (self.landing_state == 9):
             print ('Return to home')
             logging.info('\'find_target_and_land_drone\', Mission aborted. Return to home.')
+            self.pilot.vehicle.parameters['PLND_ENABLED'] = 0
+            self.pilot.vehicle.parameters['PLND_TYPE'] = 0
             self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                     # controlled fly to waypoint
                                                     # and land
