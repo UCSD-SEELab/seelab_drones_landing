@@ -1009,7 +1009,7 @@ class Navigator(object):
             logging.info('\'find_target_and_land_drone\', Landed successfully')
             # TODO Transfer info, add signpost garble here
         else:
-            print ('ERROR, landing_state is: ' + self.landing_state)
+            print ('ERROR, landing_state is: ' + str(self.landing_state))
 
 
         # Either landed or aborted, but stop landing camera
@@ -1031,12 +1031,12 @@ class Navigator(object):
                 elif arg1['distance'] > 4.5:
                     self.landing_state = 2
                 print ("Landing message sent and landing state adjusted to: "+\
-                       self.landing_state)
+                       str(self.landing_state))
                 logging.info('\'landing_adjustment_cb\', \'msg_land\', ' + \
                              str(arg1).strip('{}') + ', \'landing_state\': %d' % self.landing_state)
             else:
                 self.target_found = False
                 print ("No landing message sent and landing state is: " +\
-                       self.landing_state)
+                       str(self.landing_state))
                 logging.info('\'landing_adjustment_cb\', \'msg_land\', None' + \
                              ', \'landing_state\': %d' % self.landing_state)
