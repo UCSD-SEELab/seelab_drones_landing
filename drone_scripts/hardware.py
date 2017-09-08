@@ -54,16 +54,18 @@ class LandingCamera(threading.Thread):
             results = self._find_target(self._rawCapt.array)
             if (results['found'] == True):
                 path = str(sys.path[0]) + '/Found' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                print ("Target found")
+                cv2.imwrite(path, self._rawCapt.array)
+                print ("Hardware.py: Target found")
                 self._callback(results)
             else:
                 path = str(sys.path[0]) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                print ("Target not found")
+                print ("Hardware.py: Target not found")
+                if ((take_pic_cnt) == take_pic_time):
+                    cv2.imwrite(path, self._rawCapt.array)
+                    take_pic_cnt = 0
                 self._callback(results)
+
             take_pic_cnt = take_pic_cnt + 1;
-            if ((take_pic_cnt) == take_pic_time):
-                cv2.imwrite(path, self._rawCapt.array)
-                take_pic_cnt = 0
             time.sleep(0.1)
 
         self._camera.close()
@@ -101,30 +103,30 @@ class LandingCamera(threading.Thread):
     def _find_target(self, pic):
         corners, ids, rejects = aruco.detectMarkers(pic, self._aruco_dic)
         self._rawCapt.array = aruco.drawDetectedMarkers(pic, corners, ids)
-        
+
         numMarkers = len(corners)
 
         # TODO Fix to catch error cases
         if numMarkers == 1:
             if (ids[0][0] == 100):
-                print ("Found ID 100: use big target")
+                print ("Hardware.py: Found ID 100: use big target")
                 data = self.calculate_xyz(corners[0][0], 0.20)
 
             elif (ids[0][0] == 101):
-                print ("Found ID 101: use small target")
+                print ("Hardware.py: Found ID 101: use small target")
                 data = self.calculate_xyz(corners[0][0], 0.07)
-                
+
             else:
-                print ("Found ID %d: revert to small target" % ids[0][0])
+                print ("Hardware.py: Found ID %d: revert to small target" % ids[0][0])
                 data = self.calculate_xyz(corners[0][0], 0.07)
 
         # TODO Will the smaller marker always come second in the list?
         elif numMarkers == 2:
-            print ("Found both: use small target")
+            print ("Hardware.py: Found both: use small target")
             data = self.calculate_xyz(corners[1][0], 0.07)
 
         else:
-            print("Corners not found")
+            print("Hardware.py: Corners not found")
             data = {'xoffset': -1, 'yoffset': -1, 'distance': -1, 'found':False}
 
         return data
