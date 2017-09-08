@@ -805,6 +805,10 @@ class Navigator(object):
 
     def parse_mission(self, mission_dict):
         '''Add GPS coordinates to all the points in a mission dictionary.'''
+        # TODO Why is this needed??
+        if (mission_dict['plan'][0]['action'] == 'launch'):
+            return mission_dict
+        
         for name, POI in mission_dict['points'].iteritems():
             if (all(keys in POI for keys in ['N', 'E', 'D'])):
                 POI['GPS'] = self.meters_to_waypoint(POI)
@@ -876,6 +880,7 @@ class Navigator(object):
                 
         except Exception as e:
             print 'Exception! RTL initiated', e
+            # TODO Change for when exception is due to launch
             self.pilot.RTL_and_land()
             self.stop()
 
