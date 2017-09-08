@@ -43,6 +43,8 @@ class LandingCamera(threading.Thread):
         self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
         self._stop_event = threading.Event()
         self._stop_event.clear() # Unnecessary
+        self._notpause_event = threading.Event()
+        self._notpause_event.set() # Allow thread to run
         self.start()
 
 
@@ -50,15 +52,17 @@ class LandingCamera(threading.Thread):
         take_pic_cnt = 0
         take_pic_time = 5  #picture every 5 runs, approx one per 2 second
         while not(self.stopped()):
+            self._notpause_event.wait(1)
+            
             self._take_pic()
             results = self._find_target(self._rawCapt.array)
             if (results['found'] == True):
-                path = str(sys.path[0]) + '/Found' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                path = str(sys.path[0]) + '/Found_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 cv2.imwrite(path, self._rawCapt.array)
                 print ("Hardware.py: Target found")
                 self._callback(results)
             else:
-                path = str(sys.path[0]) + '/Fail' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Hardware.py: Target not found")
                 if ((take_pic_cnt) == take_pic_time):
                     cv2.imwrite(path, self._rawCapt.array)
@@ -66,7 +70,7 @@ class LandingCamera(threading.Thread):
                 self._callback(results)
 
             take_pic_cnt = take_pic_cnt + 1;
-            time.sleep(0.1)
+            time.sleep(0.2)
 
         self._camera.close()
 
@@ -81,6 +85,14 @@ class LandingCamera(threading.Thread):
 
     def stop(self):
         self._stop_event.set()
+        
+    
+    def pause(self):
+        self._notpause_event.clear()
+
+
+    def resume(self):
+        self._notpause_event.set()
 
 
     def stopped(self):

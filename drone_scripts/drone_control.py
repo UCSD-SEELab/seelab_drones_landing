@@ -948,6 +948,7 @@ class Navigator(object):
                                 # 4: Landing, low altitude
                                 # 5: Landing, on ground
                                 # 9: Abort
+                                #10: Manual control
 
         # Search until either target is found or a timeout is reached
         self.landing_state = 1  # 1: At target GPS location, no sighting
@@ -984,12 +985,20 @@ class Navigator(object):
 
         time_start = time.time()
         timeout = 30    # 30 seconds
+        timeout_switch = 0.5
         while(1):
             if (self.target_found == True):
+                self.hw_landing_cam.pause()
                 self.pilot.vehicle.mode = VehicleMode('LAND')
                 self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
                 self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
                 self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+                wait_for_switch = True
+                time_startswitch = time.time()
+                while (wait_for_switch):
+                    time.sleep(0.05)
+                    wait_for_switch = ((time.time() - time_startswitch) > timeout_switch) or (self.pilot.vehicle.mode == VehicleMode('LAND'))
+                self.hw_landing_cam.resume()
                 print 'Found target, start landing'
                 logging.info('\'find_target_and_land_drone\', Found target and start landing')
                 break
@@ -1000,7 +1009,7 @@ class Navigator(object):
                 logging.info('\'find_target_and_land_drone\', Target not found in %d seconds' % timeout)
                 break
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
-		        self.landing_state = 9
+		        self.landing_state = 10
 		        break
             time.sleep(0.5) # TODO Can adjust if different responsiveness is
                             # required
@@ -1010,7 +1019,14 @@ class Navigator(object):
         while (self.landing_state in [2,3,4]):
             if (self.target_found == False):
                 if (self.pilot.vehicle.mode == VehicleMode('LAND')):
+                    self.hw_landing_cam.pause()
                     self.pilot.vehicle.mode = VehicleMode('GUIDED')
+                    wait_for_switch = True
+                    time_startswitch = time.time()
+                    while (wait_for_switch):
+                        time.sleep(0.05)
+                        wait_for_switch = ((time.time() - time_startswitch) > timeout_switch) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))
+                    self.hw_landing_cam.resume()
                     time_start = time.time()
                     print ('Target lost. Switch to GUIDED.')
                     logging.info('\'find_target_and_land_drone\', Target lost. Mode set to GUIDED.')
@@ -1024,14 +1040,26 @@ class Navigator(object):
                     break
             else:
                 if (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
+                    self.hw_landing_cam.pause()
                     self.pilot.vehicle.mode = VehicleMode('LAND')
+                    wait_for_switch = True
+                    time_startswitch = time.time()
+                    while (wait_for_switch):
+                        time.sleep(0.05)
+                        wait_for_switch = ((time.time() - time_startswitch) > timeout_switch) or (self.pilot.vehicle.mode == VehicleMode('LAND'))
+                    self.hw_landing_cam.resume()
                     print ('Landing')
                     logging.info('\'find_target_and_land_drone\', Target found. Switch to LAND.')
 
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
-		        self.landing_state = 9
+		        self.landing_state = 10
 		        break
+            
 	        time.sleep(0.1)
+
+        # Either landed or aborted, but stop landing camera
+        self.hw_landing_cam.stop()
+        pub.unsubscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
 
         if (self.landing_state == 9):
             print ('Return to home')
@@ -1047,10 +1075,6 @@ class Navigator(object):
             # TODO Transfer info, add signpost garble here
         else:
             print ('ERROR, landing_state is: ' + str(self.landing_state))
-
-        # Either landed or aborted, but stop landing camera
-        self.hw_landing_cam.stop()
-        pub.unsubscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
 
 
     def landing_adjustment_cb(self, arg1=None):
