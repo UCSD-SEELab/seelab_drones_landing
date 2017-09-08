@@ -747,7 +747,7 @@ class Navigator(object):
     def find_target_and_land_cb(self, arg1=None):
         '''Tell the pilot to find the target and land the drone'''
         print 'Navigator entered find target and land callback'
-        mission = {
+        mission = { 
             'points': {
                 'home':{
                     'N': 0,
@@ -805,6 +805,7 @@ class Navigator(object):
 
     def parse_mission(self, mission_dict):
         '''Add GPS coordinates to all the points in a mission dictionary.'''
+        # TODO Why is this needed??
         if (mission_dict['plan'][0]['action'] == 'launch'):
             return mission_dict
 
@@ -879,6 +880,7 @@ class Navigator(object):
 
         except Exception as e:
             print 'Exception! RTL initiated', e
+            # TODO Change for when exception is due to launch
             self.pilot.RTL_and_land()
             self.stop()
 

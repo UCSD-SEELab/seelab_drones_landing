@@ -163,26 +163,30 @@ class DroneCoordinator(object):
         return url
 
 
-    def launch_drone(self, drone_address):
+    def launch_drone(self, drone_addr=None):
         """Launch the drone at drone_address."""
-        url = self.make_url(drone_address, 'launch')
+        if not(drone_addr):
+            drone_addr = self.primary_drone_addr
+        url = self.make_url(drone_addr, 'launch')
         start_time = json.dumps({'start_time':time.time()})
         r = requests.post(url, start_time)
         return r
 
 
-    def send_mission(self, mission_json, drone_address):
+    def send_mission(self, mission_json, drone_addr):
         """Send a mission (JSON string) to the drone at drone_address."""
-        url = self.make_url(drone_address, 'mission')
+        url = self.make_url(drone_addr, 'mission')
         mission_string = json.dumps(mission_json)
         r = requests.post(url, mission_string)
         return r
 
 
-    def send_landing_target_mission(self, target=None):
+    def send_landing_mission(self, drone_addr=None, target=None):
         """Send a landing target for the find_target_and_land mission to the 
            primary drone."""
-        url = self.make_url(self.primary_drone_addr, 'find_target_and_land')
+        if not(drone_addr):
+            drone_addr = self.primary_drone_addr
+        url = self.make_url(drone_addr, 'find_target_and_land')
         target_info = json.dumps({'target':target})
         r = requests.post(url, target_info)
         
