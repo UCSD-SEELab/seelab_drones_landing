@@ -1005,8 +1005,8 @@ class Navigator(object):
             time_elapsed = time.time() - time_start
             if (time_elapsed >= timeout):
                 self.landing_state = 9  # 9: Abort
-                print ('Target not found in %d seconds' % timeout)
-                logging.info('\'find_target_and_land_drone\', Target not found in %d seconds' % timeout)
+                print ('Target not found in %0.3f seconds' % timeout)
+                logging.info('\'find_target_and_land_drone\', Target not found in %d seconds' % time_elapsed)
                 break
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
 		        self.landing_state = 10
@@ -1030,12 +1030,13 @@ class Navigator(object):
                     time_start = time.time()
                     print ('Target lost. Switch to GUIDED.')
                     logging.info('\'find_target_and_land_drone\', Target lost. Mode set to GUIDED.')
-                elif ((time.time() - time_start) > timeout) :
+                time_elapsed = time.time() - time_start
+                if (time_elapsed >= timeout) :
                     self.landing_state = 9  # 9: Abort
                     #self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                         # controlled fly to waypoint
                                                         # and land
-                    print ('Target lost for %d seconds during landing' % timeout)
+                    print ('Target lost for %0.3f seconds during landing' % time_elapsed)
                     logging.info('\'find_target_and_land_drone\', Target lost for %d seconds during landing. Mission aborted.' % timeout)
                     break
             else:

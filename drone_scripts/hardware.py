@@ -64,7 +64,7 @@ class LandingCamera(threading.Thread):
             else:
                 path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                 print ("Hardware.py: Target not found")
-                if ((take_pic_cnt) == take_pic_time):
+                if ((take_pic_cnt) >= take_pic_time):
                     cv2.imwrite(path, self._rawCapt.array)
                     take_pic_cnt = 0
                 self._callback(results)
@@ -162,7 +162,10 @@ class LandingCamera(threading.Thread):
         # x = (avgx - self._width/2)*self._xfov/self._width
         # y = (avgy - self._height/2)*self._yfov/self._height
 
-        y = -((avgx - self._width/2)*self._xfov/self._width)
+        # y = -((avgx - self._width/2)*self._xfov/self._width)
+        # 9/7/17 above y changed to below for testing
+        y = (avgx - self._width/2)*self._xfov/self._width
+        
         x = (avgy - self._height/2)*self._yfov/self._height
 
         # TODO Update with more accurate way to calculate distance
