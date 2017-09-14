@@ -1060,13 +1060,12 @@ class Navigator(object):
 
         # Either landed or aborted, but stop landing camera
         self.hw_landing_cam.stop()
+        self.pilot.vehicle.parameters['PLND_ENABLED'] = 0
         pub.unsubscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
 
         if (self.landing_state == 9):
             print ('Return to home')
             logging.info('\'find_target_and_land_drone\', Mission aborted. Return to home.')
-            self.pilot.vehicle.parameters['PLND_ENABLED'] = 0
-            self.pilot.vehicle.parameters['PLND_TYPE'] = 0
             self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                     # controlled fly to waypoint
                                                     # and land
@@ -1079,6 +1078,9 @@ class Navigator(object):
 
 
     def landing_adjustment_cb(self, arg1=None):
+        landing_dist_low = 1.5
+        landing_dist_med = 3.0        
+        
         if self.pilot.vehicle.armed is False:
             self.landing_state = 5
         else:
@@ -1086,12 +1088,14 @@ class Navigator(object):
                 self.pilot.send_land_message(arg1['xoffset'], arg1['yoffset'],
                                              arg1['distance'])
                 self.target_found = True
-                if arg1['distance'] <= 1.5:
+                if arg1['distance'] <= landing_dist_low:
                     self.landing_state = 4
-                elif arg1['distance'] <= 3.0:
+                elif arg1['distance'] <= landing_dist_med:
                     self.landing_state = 3
-                elif arg1['distance'] > 4.5:
+                elif arg1['distance'] > landing_dist_med:
                     self.landing_state = 2
+                else:
+                    self.landing_state = 9
                 print ("Landing message sent and landing state adjusted to: "+\
                        str(self.landing_state))
                 logging.info('\'landing_adjustment_cb\', \'msg_land\', ' + \
