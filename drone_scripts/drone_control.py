@@ -195,13 +195,20 @@ class LoggerDaemon(threading.Thread):
         the database.
         '''
 
-        #TODO: this is bad
-        with open(filename) as fp:
-            config = json.load(fp)
-        for drone in config['drones']:
-            if drone['name'] == drone_name:
-                self.drone_info = drone
-        self.drone_info['mission'] = config['mission_name']
+        self.drone_info = {
+                           'mission':'unknownmission',
+                           'name':'unknowndrone'
+                           }
+
+        try:
+            with open(filename) as fp:
+                config = json.load(fp)
+            for drone in config['drones']:
+                if drone['name'] == drone_name:
+                    self.drone_info = drone
+            self.drone_info['mission'] = config['mission_name']
+        except Exception:
+            print 'ERROR Unable to load config file'
 
 
     def mission_time(self):
@@ -406,7 +413,7 @@ class Pilot(object):
         self.vehicle = None
         self.sitl = None
 
-        LoggerDaemon(self, 'Beta')
+        LoggerDaemon(self, 'Goose')
 
 
     def bringup_drone(self, connection_string=None):
