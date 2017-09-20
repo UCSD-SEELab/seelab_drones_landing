@@ -961,7 +961,8 @@ class Navigator(object):
         self.landing_state = 1  # 1: At target GPS location, no sighting
 
         # Initialize landing camera hardware and subscription
-        self.hw_landing_cam = hardware.LandingCamera(target)
+        self.hw_landing_cam = hardware.LandingCamera(target=target, 
+                                                     simulated=self.simulated_landing_camera)
         pub.subscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
         print 'Subscribed'
 

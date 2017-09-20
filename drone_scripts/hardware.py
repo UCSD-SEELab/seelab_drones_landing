@@ -26,21 +26,23 @@ from time import localtime, strftime
 
 class LandingCamera(threading.Thread):
 
-    def __init__(self, target=None):
+    def __init__(self, simulated=False, target=None):
         super(LandingCamera, self).__init__()
         #self.daemon = True
-        self._width = 640
-        self._height = 480
-        self._xfov = 62.2 * math.pi/180
-        self._yfov = 48.8 * math.pi/180
-        self._camera = PiCamera()
-        self._camera.resolution = (self._width, self._height)
-        self._camera.framerate = 30
-        self._camera.shutter_speed = 0
-        self._camera.ISO = 0
-        self._camera.meter_mode = 'matrix'
-        self._rawCapt = PiRGBArray(self._camera, size = (self._width, self._height))
-        self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
+        self._simulated = simulated
+        if (simulated == False):
+            self._width = 640
+            self._height = 480
+            self._xfov = 62.2 * math.pi/180
+            self._yfov = 48.8 * math.pi/180
+            self._camera = PiCamera()
+            self._camera.resolution = (self._width, self._height)
+            self._camera.framerate = 30
+            self._camera.shutter_speed = 0
+            self._camera.ISO = 0
+            self._camera.meter_mode = 'matrix'
+            self._rawCapt = PiRGBArray(self._camera, size = (self._width, self._height))
+            self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)            
         self._stop_event = threading.Event()
         self._stop_event.clear() # Unnecessary
         self._notpause_event = threading.Event()
@@ -49,30 +51,39 @@ class LandingCamera(threading.Thread):
 
 
     def run(self):
-        take_pic_cnt = 0
-        take_pic_time = 5  #picture every 5 runs, approx one per 2 second
-        while not(self.stopped()):
-            self._notpause_event.wait(1)
-            
-            self._take_pic()
-            results = self._find_target(self._rawCapt.array)
-            if (results['found'] == True):
-                path = str(sys.path[0]) + '/Found_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                cv2.imwrite(path, self._rawCapt.array)
-                print ("Hardware.py: Target found")
-                self._callback(results)
-            else:
-                path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                print ("Hardware.py: Target not found")
-                if ((take_pic_cnt) >= take_pic_time):
+        if (self._simulated == False):
+            take_pic_cnt = 0
+            take_pic_time = 5  #picture every 5 runs, approx one per 2 second
+            while not(self.stopped()):
+                self._notpause_event.wait(2)
+                
+                self._take_pic()
+                results = self._find_target(self._rawCapt.array)
+                if (results['found'] == True):
+                    path = str(sys.path[0]) + '/Found_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                     cv2.imwrite(path, self._rawCapt.array)
-                    take_pic_cnt = 0
+                    print ("Hardware.py: Target found")
+                    self._callback(results)
+                else:
+                    path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                    print ("Hardware.py: Target not found")
+                    if ((take_pic_cnt) >= take_pic_time):
+                        cv2.imwrite(path, self._rawCapt.array)
+                        take_pic_cnt = 0
+                    self._callback(results)
+    
+                take_pic_cnt = take_pic_cnt + 1;
+                time.sleep(0.2)
+    
+            self._camera.close()
+            
+        else:
+            while not(self.stopped()):
+                self._notpause_event.wait(2)
+                
+                results = {'xoffset': 0, 'yoffset': 0, 'distance': 1, 'found':True}
                 self._callback(results)
-
-            take_pic_cnt = take_pic_cnt + 1;
-            time.sleep(0.2)
-
-        self._camera.close()
+                time.sleep(0.5)
 
 
     def get_proc_id(self, b_only_pid=False):
