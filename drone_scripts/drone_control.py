@@ -654,6 +654,21 @@ class Pilot(object):
     	self.vehicle.send_mavlink(message)
     	self.vehicle.flush()
 
+    def send_distance_message(self, dist):
+        message = self.vehicle.message_factory.distance_sensor_encode(
+            0,          # time since system boot, not used
+            1,          # min distance cm
+            10000,      # max distance cm
+            dist,       # current distance, must be int
+            0,          # type = laser?
+            0,          # onboard id, not used
+            mavutil.mavlink.MAV_SENSOR_ROTATION_PITCH_270, # must be set to MAV_SENSOR_ROTATION_PITCH_270 for mavlink rangefinder, represents downward facing
+            0           # covariance, not used
+        )
+        logging.info('\'send_distance_message\', \'distance\': %0.4f' % dist)
+        self.vehicle.send_mavlink(mesagge)
+        self.vehicle.flush()
+
 
     def get_proc_id(self, b_only_pid=False):
         ''' Gets the class name and process id of the thread '''
@@ -754,7 +769,7 @@ class Navigator(object):
     def find_target_and_land_cb(self, arg1=None):
         '''Tell the pilot to find the target and land the drone'''
         print 'Navigator entered find target and land callback'
-        mission = { 
+        mission = {
             'points': {
                 'home':{
                     'N': 0,
@@ -961,7 +976,7 @@ class Navigator(object):
         self.landing_state = 1  # 1: At target GPS location, no sighting
 
         # Initialize landing camera hardware and subscription
-        self.hw_landing_cam = hardware.LandingCamera(target=target, 
+        self.hw_landing_cam = hardware.LandingCamera(target=target,
                                                      simulated=self.simulated_landing_camera)
         pub.subscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
         print 'Subscribed'
@@ -1001,6 +1016,13 @@ class Navigator(object):
                 self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
                 self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
                 self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+
+                # set rangefinder
+                self.pilot.vehicle.parameters['PLND_TYPE'] = 10
+                self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+                self.pilot.vehicle.parameters['RNGFND_MAX_CM'] = 10000
+                self.pilot.vehicle.parameters['RNGFND_GNDCLEAR'] = 5
+
                 wait_for_switch = True
                 time_startswitch = time.time()
                 while (wait_for_switch):
@@ -1063,7 +1085,7 @@ class Navigator(object):
 	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
 		        self.landing_state = 10
 		        break
-            
+
 	        time.sleep(0.1)
 
         # Either landed or aborted, but stop landing camera
@@ -1087,14 +1109,15 @@ class Navigator(object):
 
     def landing_adjustment_cb(self, arg1=None):
         landing_dist_low = 1.5
-        landing_dist_med = 3.0        
-        
+        landing_dist_med = 3.0
+
         if self.pilot.vehicle.armed is False:
             self.landing_state = 5
         else:
             if arg1['found'] is True:
                 self.pilot.send_land_message(arg1['xoffset'], arg1['yoffset'],
                                              arg1['distance'])
+                self.pilot.send_distance_message(int(arg1['distance']*100))
                 self.target_found = True
                 if arg1['distance'] <= landing_dist_low:
                     self.landing_state = 4
