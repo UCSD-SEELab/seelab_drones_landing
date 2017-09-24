@@ -1018,8 +1018,8 @@ class Navigator(object):
                 self.pilot.vehicle.parameters['PLND_TYPE'] = 1
 
                 # set rangefinder
-                self.pilot.vehicle.parameters['PLND_TYPE'] = 10
-                self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+                self.pilot.vehicle.parameters['RNGFND_TYPE'] = 10
+                self.pilot.vehicle.parameters['RNGFND_MIN_CM'] = 1
                 self.pilot.vehicle.parameters['RNGFND_MAX_CM'] = 10000
                 self.pilot.vehicle.parameters['RNGFND_GNDCLEAR'] = 5
 
