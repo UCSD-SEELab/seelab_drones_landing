@@ -73,7 +73,7 @@ class LandingCamera(threading.Thread):
                         cv2.imwrite(path, self._rawCapt.array)
                         take_pic_cnt = 0
 
-                if (caneratest== True):
+                if (cameratest == True):
                     # take picture but send fake messages to see if camera causes interference
                     results = {'xoffset': 0, 'yoffset': 0, 'distance': 1, 'found':True}
                     self._callback(results)

@@ -666,7 +666,7 @@ class Pilot(object):
             0           # covariance, not used
         )
         logging.info('\'send_distance_message\', \'distance\': %0.4f' % dist)
-        self.vehicle.send_mavlink(mesagge)
+        self.vehicle.send_mavlink(message)
         self.vehicle.flush()
 
 
