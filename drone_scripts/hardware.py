@@ -42,7 +42,7 @@ class LandingCamera(threading.Thread):
             self._camera.ISO = 0
             self._camera.meter_mode = 'matrix'
             self._rawCapt = PiRGBArray(self._camera, size = (self._width, self._height))
-            self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)            
+            self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
         self._stop_event = threading.Event()
         self._stop_event.clear() # Unnecessary
         self._notpause_event = threading.Event()
@@ -51,36 +51,51 @@ class LandingCamera(threading.Thread):
 
 
     def run(self):
+        cameratest = False
+        CPUusagetest = False
         if (self._simulated == False):
             take_pic_cnt = 0
             take_pic_time = 5  #picture every 5 runs, approx one per 2 second
             while not(self.stopped()):
                 self._notpause_event.wait(2)
-                
+
                 self._take_pic()
                 results = self._find_target(self._rawCapt.array)
                 if (results['found'] == True):
                     path = str(sys.path[0]) + '/Found_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                     cv2.imwrite(path, self._rawCapt.array)
                     print ("Hardware.py: Target found")
-                    self._callback(results)
+
                 else:
                     path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
                     print ("Hardware.py: Target not found")
                     if ((take_pic_cnt) >= take_pic_time):
                         cv2.imwrite(path, self._rawCapt.array)
                         take_pic_cnt = 0
+
+                if (caneratest== True):
+                    # take picture but send fake messages to see if camera causes interference
+                    results = {'xoffset': 0, 'yoffset': 0, 'distance': 1, 'found':True}
                     self._callback(results)
-    
+                else:
+                    self._callback(results)
+
                 take_pic_cnt = take_pic_cnt + 1;
                 time.sleep(0.2)
-    
+
             self._camera.close()
-            
+
         else:
+
             while not(self.stopped()):
+
+                if (CPUusagetest == True):
+                    # process picture on file to test CPU usage
+                    pic = cv2.imread('/home/pi/drone_scripts/seelab_drones_landing/launch/Found_2017_09_18__11_05_12.jpg', 0)
+                    dc = self._find_target(pic)
+
                 self._notpause_event.wait(2)
-                
+
                 results = {'xoffset': 0, 'yoffset': 0, 'distance': 1, 'found':True}
                 self._callback(results)
                 time.sleep(0.5)
@@ -96,8 +111,8 @@ class LandingCamera(threading.Thread):
 
     def stop(self):
         self._stop_event.set()
-        
-    
+
+
     def pause(self):
         self._notpause_event.clear()
 
@@ -176,7 +191,7 @@ class LandingCamera(threading.Thread):
         # y = -((avgx - self._width/2)*self._xfov/self._width)
         # 9/7/17 above y changed to below for testing
         y = (avgx - self._width/2)*self._xfov/self._width
-        
+
         x = (avgy - self._height/2)*self._yfov/self._height
 
         # TODO Update with more accurate way to calculate distance
