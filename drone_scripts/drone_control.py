@@ -1008,7 +1008,6 @@ class Navigator(object):
 
         time_start = time.time()
         timeout = 30    # 30 seconds
-        timeout_switch = 0.5
         while(1):
             if (self.target_found == True):
                 self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
@@ -1044,9 +1043,6 @@ class Navigator(object):
                 time_elapsed = time.time() - time_start
                 if (time_elapsed >= timeout) :
                     self.landing_state = 9  # 9: Abort
-                    #self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
-                                                        # controlled fly to waypoint
-                                                        # and land
                     print ('Target lost for %0.3f seconds during landing' % time_elapsed)
                     logging.info('\'find_target_and_land_drone\', Target lost for %d seconds during landing. Mission aborted.' % timeout)
                     break
@@ -1080,10 +1076,10 @@ class Navigator(object):
         landing_dist_low = 1.5
         landing_dist_med = 3.0
 
-        if self.pilot.vehicle.armed is False:
+        if (self.pilot.vehicle.armed == False):
             self.landing_state = 5
         else:
-            if arg1['found'] is True:
+            if (arg1['found'] == True):
                 self.pilot.send_land_message(arg1['xoffset'], arg1['yoffset'],
                                              arg1['distance'])
                 #self.pilot.send_distance_message(int(arg1['distance']*100))
