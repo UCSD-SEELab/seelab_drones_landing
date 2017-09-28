@@ -654,20 +654,20 @@ class Pilot(object):
     	self.vehicle.send_mavlink(message)
     	self.vehicle.flush()
 
-    def send_distance_message(self, dist):
-        message = self.vehicle.message_factory.distance_sensor_encode(
-            0,          # time since system boot, not used
-            1,          # min distance cm
-            10000,      # max distance cm
-            dist,       # current distance, must be int
-            0,          # type = laser?
-            0,          # onboard id, not used
-            mavutil.mavlink.MAV_SENSOR_ROTATION_PITCH_270, # must be set to MAV_SENSOR_ROTATION_PITCH_270 for mavlink rangefinder, represents downward facing
-            0           # covariance, not used
-        )
-        logging.info('\'send_distance_message\', \'distance\': %0.4f' % dist)
-        self.vehicle.send_mavlink(message)
-        self.vehicle.flush()
+    # def send_distance_message(self, dist):
+    #     message = self.vehicle.message_factory.distance_sensor_encode(
+    #         0,          # time since system boot, not used
+    #         1,          # min distance cm
+    #         10000,      # max distance cm
+    #         dist,       # current distance, must be int
+    #         0,          # type = laser?
+    #         0,          # onboard id, not used
+    #         mavutil.mavlink.MAV_SENSOR_ROTATION_PITCH_270, # must be set to MAV_SENSOR_ROTATION_PITCH_270 for mavlink rangefinder, represents downward facing
+    #         0           # covariance, not used
+    #     )
+    #     logging.info('\'send_distance_message\', \'distance\': %0.4f' % dist)
+    #     self.vehicle.send_mavlink(message)
+    #     self.vehicle.flush()
 
 
     def get_proc_id(self, b_only_pid=False):
@@ -1011,24 +1011,16 @@ class Navigator(object):
         timeout_switch = 0.5
         while(1):
             if (self.target_found == True):
-                self.hw_landing_cam.pause()
-                self.pilot.vehicle.mode = VehicleMode('LAND')
                 self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
                 self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
                 self.pilot.vehicle.parameters['PLND_TYPE'] = 1
 
                 # set rangefinder
-                self.pilot.vehicle.parameters['RNGFND_TYPE'] = 10
-                self.pilot.vehicle.parameters['RNGFND_MIN_CM'] = 1
-                self.pilot.vehicle.parameters['RNGFND_MAX_CM'] = 10000
-                self.pilot.vehicle.parameters['RNGFND_GNDCLEAR'] = 5
+                # self.pilot.vehicle.parameters['RNGFND_TYPE'] = 10
+                # self.pilot.vehicle.parameters['RNGFND_MIN_CM'] = 1
+                # self.pilot.vehicle.parameters['RNGFND_MAX_CM'] = 10000
+                # self.pilot.vehicle.parameters['RNGFND_GNDCLEAR'] = 5
 
-                wait_for_switch = True
-                time_startswitch = time.time()
-                while (wait_for_switch):
-                    time.sleep(0.05)
-                    wait_for_switch = ((time.time() - time_startswitch) > timeout_switch) or (self.pilot.vehicle.mode == VehicleMode('LAND'))
-                self.hw_landing_cam.resume()
                 print 'Found target, start landing'
                 logging.info('\'find_target_and_land_drone\', Found target and start landing')
                 break
@@ -1038,7 +1030,7 @@ class Navigator(object):
                 print ('Target not found in %0.3f seconds' % timeout)
                 logging.info('\'find_target_and_land_drone\', Target not found in %d seconds' % time_elapsed)
                 break
-	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
+	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
 		        self.landing_state = 10
 		        break
             time.sleep(0.5) # TODO Can adjust if different responsiveness is
@@ -1048,18 +1040,7 @@ class Navigator(object):
         'Start landing'
         while (self.landing_state in [2,3,4]):
             if (self.target_found == False):
-                if (self.pilot.vehicle.mode == VehicleMode('LAND')):
-                    self.hw_landing_cam.pause()
-                    self.pilot.vehicle.mode = VehicleMode('GUIDED')
-                    wait_for_switch = True
-                    time_startswitch = time.time()
-                    while (wait_for_switch):
-                        time.sleep(0.05)
-                        wait_for_switch = ((time.time() - time_startswitch) > timeout_switch) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))
-                    self.hw_landing_cam.resume()
-                    time_start = time.time()
-                    print ('Target lost. Switch to GUIDED.')
-                    logging.info('\'find_target_and_land_drone\', Target lost. Mode set to GUIDED.')
+                # TODO Circle around? Adjust height? Loiter?
                 time_elapsed = time.time() - time_start
                 if (time_elapsed >= timeout) :
                     self.landing_state = 9  # 9: Abort
@@ -1069,20 +1050,8 @@ class Navigator(object):
                     print ('Target lost for %0.3f seconds during landing' % time_elapsed)
                     logging.info('\'find_target_and_land_drone\', Target lost for %d seconds during landing. Mission aborted.' % timeout)
                     break
-            else:
-                if (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
-                    self.hw_landing_cam.pause()
-                    self.pilot.vehicle.mode = VehicleMode('LAND')
-                    wait_for_switch = True
-                    time_startswitch = time.time()
-                    while (wait_for_switch):
-                        time.sleep(0.05)
-                        wait_for_switch = ((time.time() - time_startswitch) > timeout_switch) or (self.pilot.vehicle.mode == VehicleMode('LAND'))
-                    self.hw_landing_cam.resume()
-                    print ('Landing')
-                    logging.info('\'find_target_and_land_drone\', Target found. Switch to LAND.')
 
-	        if not ((self.pilot.vehicle.mode == VehicleMode('LAND')) or (self.pilot.vehicle.mode == VehicleMode('GUIDED'))):
+	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
 		        self.landing_state = 10
 		        break
 
@@ -1117,7 +1086,7 @@ class Navigator(object):
             if arg1['found'] is True:
                 self.pilot.send_land_message(arg1['xoffset'], arg1['yoffset'],
                                              arg1['distance'])
-                self.pilot.send_distance_message(int(arg1['distance']*100))
+                #self.pilot.send_distance_message(int(arg1['distance']*100))
                 self.target_found = True
                 if arg1['distance'] <= landing_dist_low:
                     self.landing_state = 4
