@@ -1006,13 +1006,31 @@ class Navigator(object):
             self.pilot.vehicle.mode = VehicleMode('GUIDED')
         '''
 
+        self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
+        self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+        self.pilot.vehicle.flush()
+
+        logging.info('\'find_target_and_land_drone\', PLND_ENABLED is ' + str(self.pilot.vehicle.parameters['PLND_ENABLED']))
+
         time_start = time.time()
         timeout = 30    # 30 seconds
+	    time_switch = 5
         while(1):
             if (self.target_found == True):
-                self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
-                self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
-                self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+                # self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
+                # self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+                # self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
+                # self.pilot.vehicle.flush()
+                #
+		        # while ((self.pilot.vehicle.parameters['PLND_ENABLED'] != 1) and  (time.time() - time_start < time_switch)):
+			    #     self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
+			    #     time.sleep(0.5)
+
+                # if (self.pilot.vehicle.parameters['PLND_ENABLED'] == 1):
+                #     logging.info('\'find_target_and_land_drone\', Turned PLND_ENABLED on)
+                # else:
+                #     logging.info('\'find_target_and_land_drone\', Turning on PLND_ENABLED timed out after 5 seconds)
+
 
                 # set rangefinder
                 # self.pilot.vehicle.parameters['RNGFND_TYPE'] = 10
@@ -1035,6 +1053,7 @@ class Navigator(object):
             time.sleep(0.5) # TODO Can adjust if different responsiveness is
                             # required
 
+        time_start = time.time()
         timeout = 5     # timeout of 5 seconds
         'Start landing'
         while (self.landing_state in [2,3,4]):

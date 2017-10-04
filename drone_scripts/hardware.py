@@ -75,17 +75,19 @@ class LandingCamera(threading.Thread):
 
                 if (cameratest == True):
                     # take picture but send fake messages to see if camera causes interference
-                    results = {'xoffset': 0, 'yoffset': 0, 'distance': 1, 'found':True}
+                    results = {'xoffset': 0.3, 'yoffset': 0, 'distance': 1, 'found':True}
                     self._callback(results)
                 else:
                     self._callback(results)
 
                 take_pic_cnt = take_pic_cnt + 1;
-                time.sleep(0.2)
+                time.sleep(0.1)
 
             self._camera.close()
 
         else:
+
+            distance_sim = 4
 
             while not(self.stopped()):
 
@@ -96,7 +98,12 @@ class LandingCamera(threading.Thread):
 
                 self._notpause_event.wait(2)
 
-                results = {'xoffset': 0, 'yoffset': 0, 'distance': 1, 'found':True}
+                if (distance_sim == 0):
+                    results = {'xoffset': 0.3, 'yoffset': 0, 'distance': 0, 'found':True}
+                else:
+                    results = {'xoffset': 0.3, 'yoffset': 0, 'distance': distance_sim, 'found':True}
+                    distance_sim = distance_sim - 0.1
+                    
                 self._callback(results)
                 time.sleep(0.5)
 
