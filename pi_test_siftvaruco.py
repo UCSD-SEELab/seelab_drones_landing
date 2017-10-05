@@ -33,17 +33,17 @@ def find_target(pic, method):
                 for m, n in matches:
                     if m.distances < 0.7*n.distance:
                         goodMatches.append(m)
-                    if (len(goodMatches) > 10):
-                        src_pts = np.float32([ imgKP[m.queryIdx].pt for m in goodMatches ]).reshape(-1,1,2) #query images' features
-                        dst_pts = np.float32([ picKP[m.trainIdx].pt for m in goodMatches ]).reshape(-1,1,2) #train images' features
-                        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0) 	#finds the perspective transformation of object
-                        list_time.append(time.time())                        
-                        h,w = grayImg.shape
-                        pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-                if (M):
-                    dst = cv2.perspectiveTransform(pts, M)
-                    list_time.append(time.time())
-                    found = True
+                if (len(goodMatches) > 10):
+                    src_pts = np.float32([ imgKP[m.queryIdx].pt for m in goodMatches ]).reshape(-1,1,2) #query images' features
+                    dst_pts = np.float32([ picKP[m.trainIdx].pt for m in goodMatches ]).reshape(-1,1,2) #train images' features
+                    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0) 	#finds the perspective transformation of object
+                    list_time.append(time.time())                        
+                    h,w = grayImg.shape
+                    pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+                    if (M):
+                        dst = cv2.perspectiveTransform(pts, M)
+                        list_time.append(time.time())
+                        found = True
                 
         time_elapsed = time.time() - time_start
         for ind in xrange(len(list_time)-1):
