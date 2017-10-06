@@ -19,7 +19,7 @@ def find_target(pic, method):
     
     time_start = time.time()
     if (method == 'sift'):
-        list_time = time_start()
+        list_time = [time_start]
         grayPic = cv2.cvtColor(pic, cv2.COLOR_BGR2GRAY)
         picKP, picDes = sift.detectAndCompute(grayPic, None)
         list_time.append(time.time())
@@ -31,7 +31,7 @@ def find_target(pic, method):
             if (matches != None):
                 goodMatches = []
                 for m, n in matches:
-                    if m.distances < 0.7*n.distance:
+                    if (m.distance < 0.7*n.distance):
                         goodMatches.append(m)
                 if (len(goodMatches) > 10):
                     src_pts = np.float32([ imgKP[m.queryIdx].pt for m in goodMatches ]).reshape(-1,1,2) #query images' features
@@ -40,7 +40,7 @@ def find_target(pic, method):
                     list_time.append(time.time())                        
                     h,w = grayImg.shape
                     pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-                    if (M):
+                    if not(M == None):
                         dst = cv2.perspectiveTransform(pts, M)
                         list_time.append(time.time())
                         found = True
@@ -71,11 +71,11 @@ if __name__ == '__main__':
     # set up camera
     print '%0.2f: Initializing Camera' % (time.time() - time_start)
     camera = PiCamera()
-    if (int(sys.argv[2] == 0)):
+    if (int(sys.argv[2]) == 0):
         width = 640     # Mode 7, 640x480, aspect ratio 4:3, 40 to 90 fps, full FoV
         height = 480
     else:
-        width = 1640    # Mode 4, 1640x1232, aspect ratio 4:3, 1/10 to 40 fps, full FoV
+        width = 1648    # Mode 4, 1648x1232, aspect ratio 4:3, 1/10 to 40 fps, full FoV
         height = 1232
     filename = sys.argv[3]
     camera.resolution = (width, height)
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     
     # set up sift
     print '%0.2f: Initializing SIFT' % (time.time() - time_start)
-    grayImg = cv2.imread('/home/pi/speedtest/marker5.jpg', 0) # TODO PUT THIS IN
+    grayImg = cv2.imread('/home/pi/speedtest/qrcode_200x200.png', 0) # TODO PUT THIS IN
     sift = cv2.xfeatures2d.SIFT_create()
     FLANN_INDEX_KDTREE = 0
     index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     print '%0.2f: Initializing SIFT Finished' % (time.time() - time_start)
     
     # Run trials
-    list_results = [[0]*6]*(num_pics + 1)
+    list_results = [[0]*7 for x in xrange(num_pics + 1)]
     list_results[0] = ['Trial', 
                        't (take pic)',
                        't (save pic)',
