@@ -687,7 +687,7 @@ class Navigator(object):
 
     '''
 
-    def __init__(self, simulated=False, simulated_landing_camera=False, takeoff_alt=5):
+    def __init__(self, simulated=False, simulated_landing_camera=False, takeoff_alt=2):
         '''Construct an instance of the Navigator class.
 
         simulated -- Are we running this on the simulator?
@@ -1006,15 +1006,15 @@ class Navigator(object):
             self.pilot.vehicle.mode = VehicleMode('GUIDED')
         '''
 
-        self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
-        self.pilot.vehicle.parameters['PLND_TYPE'] = 1
-        self.pilot.vehicle.flush()
+        # self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
+        # self.pilot.vehicle.parameters['PLND_TYPE'] = 1
+        # self.pilot.vehicle.flush()
 
         logging.info('\'find_target_and_land_drone\', PLND_ENABLED is ' + str(self.pilot.vehicle.parameters['PLND_ENABLED']))
 
         time_start = time.time()
         timeout = 30    # 30 seconds
-	    time_switch = 5
+        time_switch = 5
         while(1):
             if (self.target_found == True):
                 # self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
@@ -1065,6 +1065,8 @@ class Navigator(object):
                     print ('Target lost for %0.3f seconds during landing' % time_elapsed)
                     logging.info('\'find_target_and_land_drone\', Target lost for %d seconds during landing. Mission aborted.' % timeout)
                     break
+            else:
+                time_start = time.time()
 
 	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
 		        self.landing_state = 10
@@ -1074,7 +1076,7 @@ class Navigator(object):
 
         # Either landed or aborted, but stop landing camera
         self.hw_landing_cam.stop()
-        self.pilot.vehicle.parameters['PLND_ENABLED'] = 0
+        # self.pilot.vehicle.parameters['PLND_ENABLED'] = 0
         pub.unsubscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
 
         if (self.landing_state == 9):

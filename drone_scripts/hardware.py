@@ -42,7 +42,7 @@ class LandingCamera(threading.Thread):
             self._camera.ISO = 0
             self._camera.meter_mode = 'matrix'
             self._rawCapt = PiRGBArray(self._camera, size = (self._width, self._height))
-            self._aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
+            self._aruco_dic = aruco.Dictionary_get(aruco.DICT_5X5_50)
         self._stop_event = threading.Event()
         self._stop_event.clear() # Unnecessary
         self._notpause_event = threading.Event()
@@ -103,7 +103,7 @@ class LandingCamera(threading.Thread):
                 else:
                     results = {'xoffset': 0.3, 'yoffset': 0, 'distance': distance_sim, 'found':True}
                     distance_sim = distance_sim - 0.1
-                    
+
                 self._callback(results)
                 time.sleep(0.5)
 
@@ -153,12 +153,12 @@ class LandingCamera(threading.Thread):
 
         # TODO Fix to catch error cases
         if numMarkers == 1:
-            if (ids[0][0] == 100):
-                print ("Hardware.py: Found ID 100: use big target")
+            if (ids[0][0] == 5):
+                print ("Hardware.py: Found ID 5: use big target")
                 data = self.calculate_xyz(corners[0][0], 0.20)
 
-            elif (ids[0][0] == 101):
-                print ("Hardware.py: Found ID 101: use small target")
+            elif (ids[0][0] == 8):
+                print ("Hardware.py: Found ID 8: use small target")
                 data = self.calculate_xyz(corners[0][0], 0.07)
 
             else:
