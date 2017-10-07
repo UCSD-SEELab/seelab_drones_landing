@@ -586,7 +586,7 @@ class Pilot(object):
         return self.goto_waypoint(location)
 
 
-    def goto_waypoint(self, global_relative, ground_tol=0.8, alt_tol=1.0, speed=50):
+    def goto_waypoint(self, global_relative, ground_tol=0.8, alt_tol=1.0, speed=None):
         '''Go to a waypoint and block until we get there.
 
         global_relative -- A LocationGlobalRelative, the waypoint
@@ -598,12 +598,14 @@ class Pilot(object):
                  that there are cases where the drone will move faster than
                  this, so DO NOT use this as a safety cutoff.
         '''
-        self.vehicle.parameters['WPNAV_SPEED'] = speed
+        if (speed):
+            self.vehicle.parameters['WPNAV_SPEED'] = speed
+            
         if self.vehicle.mode != 'GUIDED':
             print 'Vehicle {0} aborted goto_waypoint due to mode switch to {1}'.format(self.instance, self.vehicle.mode.name)
             return False
         #TODO: May want to replace simple_goto with something better
-        self.vehicle.simple_goto(global_relative, groundspeed=self.groundspeed)
+        self.vehicle.simple_goto(global_relative)
         good_count = 0  # Count that we're actually at the waypoint for a few times in a row
         while (self.vehicle.mode.name == 'GUIDED' and good_count < 3 and not(self._cancel_task)):
             grf = self.vehicle.location.global_relative_frame
@@ -963,7 +965,7 @@ class Navigator(object):
         point = self.current_mission['points'][name]
         global_rel = point['GPS']
         print 'Moving to {}'.format(name)
-        self.pilot.goto_waypoint(global_rel, ground_tol=ground_tol_in, speed=70)
+        self.pilot.goto_waypoint(global_rel, ground_tol=ground_tol_in)
 
 
     def patrol(self, event):
@@ -974,7 +976,7 @@ class Navigator(object):
             for name in event['points']:
 		print 'going to {}'.format(name)
                 point = self.current_mission['points'][name]
-                self.pilot.goto_waypoint(point['GPS'], speed=10)
+                self.pilot.goto_waypoint(point['GPS'])
         print 'Finished patrolling'
 
 
