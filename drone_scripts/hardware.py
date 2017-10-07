@@ -53,25 +53,27 @@ class LandingCamera(threading.Thread):
     def run(self):
         cameratest = False
         CPUusagetest = False
+        
+        save_delay = 0.5
+        time_start = time.time()
         if (self._simulated == False):
-            take_pic_cnt = 0
-            take_pic_time = 5  #picture every 5 runs, approx one per 2 second
             while not(self.stopped()):
                 self._notpause_event.wait(2)
 
                 self._take_pic()
                 results = self._find_target(self._rawCapt.array)
-                #if (results['found'] == True):
-                #    path = str(sys.path[0]) + '/Found_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                #    cv2.imwrite(path, self._rawCapt.array)
-                #    print ("Hardware.py: Target found")
-
-                #else:
-                #    path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                #    print ("Hardware.py: Target not found")
-                #    if ((take_pic_cnt) >= take_pic_time):
-                #        cv2.imwrite(path, self._rawCapt.array)
-                #        take_pic_cnt = 0
+                
+                if (results['found'] == True):
+                    print ("Hardware.py: Target found")
+                    if ((time.time() - time_start) >= save_delay):
+                        path = str(sys.path[0]) + '/Pics/' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '_Found.jpg'
+                        cv2.imwrite(path, self._rawCapt.array)
+                        time_start = time.time()   
+                else:
+                    print ("Hardware.py: Target not found")
+                    time_start = time.time() - save_delay # Save next successful photo
+                    path = str(sys.path[0]) + '/Pics/' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '_Fail.jpg'
+                    cv2.imwrite(path, self._rawCapt.array)          
 
                 if (cameratest == True):
                     # take picture but send fake messages to see if camera causes interference
@@ -80,24 +82,19 @@ class LandingCamera(threading.Thread):
                 else:
                     self._callback(results)
 
-                #take_pic_cnt = take_pic_cnt + 1;
                 time.sleep(0.01)
-
             self._camera.close()
 
         else:
-
             distance_sim = 4
 
             while not(self.stopped()):
-
+                self._notpause_event.wait(2)
                 if (CPUusagetest == True):
                     # process picture on file to test CPU usage
                     pic = cv2.imread('/home/pi/drone_scripts/seelab_drones_landing/launch/Found_2017_09_18__11_05_12.jpg', 0)
                     dc = self._find_target(pic)
-
-                self._notpause_event.wait(2)
-
+                    
                 if (distance_sim == 0):
                     results = {'xoffset': 0.3, 'yoffset': 0, 'distance': 0, 'found':True}
                 else:
@@ -105,7 +102,7 @@ class LandingCamera(threading.Thread):
                     distance_sim = distance_sim - 0.1
 
                 self._callback(results)
-                time.sleep(0.5)
+                time.sleep(0.25)
 
 
     def get_proc_id(self, b_only_pid=False):
@@ -114,6 +111,24 @@ class LandingCamera(threading.Thread):
             return os.getpid()
         else:
             return {'name':self.__class__.__name__, 'pid':os.getpid()}
+
+
+    def set_resolution(self, width, height):
+        '''Change the resolution of the camera. Standard settings can be found
+           at https://picamera.readthedocs.io/en/release-1.13/fov.html .
+           
+           #	Resolution	Aspect   Framerates	        Video	FoV	    Binning
+           1	1920x1080	16:9	 1/10 <= fps <= 30	x	 	Partial	None
+           4	1648x1232	4:3	     1/10 <= fps <= 40	x	 	Full	2x2
+           5	1640x922	16:9	 1/10 <= fps <= 40	x	 	Full	2x2
+           6	1280x720	16:9	 40 < fps <= 90	    x	 	Partial	2x2
+           7	640x480	    4:3	     40 < fps <= 90	    x	 	Partial	2x2
+        '''
+        self._width = width
+        self._height = height
+        self._xfov = 62.2 * math.pi/180
+        self._yfov = 48.8 * math.pi/180
+        self._camera.resolution = (self._width, self._height)
 
 
     def stop(self):
@@ -147,7 +162,7 @@ class LandingCamera(threading.Thread):
 
     def _find_target(self, pic):
         corners, ids, rejects = aruco.detectMarkers(pic, self._aruco_dic)
-        #self._rawCapt.array = aruco.drawDetectedMarkers(pic, corners, ids)
+        self._rawCapt.array = aruco.drawDetectedMarkers(pic, corners, ids)
 
         numMarkers = len(corners)
 
@@ -155,20 +170,20 @@ class LandingCamera(threading.Thread):
         if numMarkers == 1:
             if (ids[0][0] == 5):
                 print ("Hardware.py: Found ID 5: use big target")
-                data = self.calculate_xyz(corners[0][0], 0.20)
+                data = self._calculate_xyz(corners[0][0], 0.20)
 
             elif (ids[0][0] == 8):
                 print ("Hardware.py: Found ID 8: use small target")
-                data = self.calculate_xyz(corners[0][0], 0.07)
+                data = self._calculate_xyz(corners[0][0], 0.07)
 
             else:
                 print ("Hardware.py: Found ID %d: revert to small target" % ids[0][0])
-                data = self.calculate_xyz(corners[0][0], 0.07)
+                data = self._calculate_xyz(corners[0][0], 0.07)
 
         # TODO Will the smaller marker always come second in the list?
         elif numMarkers == 2:
             print ("Hardware.py: Found both: use small target")
-            data = self.calculate_xyz(corners[1][0], 0.07)
+            data = self._calculate_xyz(corners[1][0], 0.07)
 
         else:
             print("Hardware.py: Corners not found")
@@ -177,7 +192,7 @@ class LandingCamera(threading.Thread):
         return data
 
 
-    def calculate_xyz(self, corners, size):
+    def _calculate_xyz(self, corners, size):
         sumx = 0
         sumy = 0
 
@@ -190,20 +205,20 @@ class LandingCamera(threading.Thread):
 
 	    # Adjusting for camera rotation
 	    # From testing on 6 Oct 2017
-        # Red arms are top photo
+        # Red arms are top photo (-Y)
 		#   +Y in cmd msg
-    	# White arms are bottom photo
+    	# White arms are bottom photo (+Y)
 		#   -Y in cmd msg
-    	# Battery connector is left photo
+    	# Battery connector is left photo (-X)
 		#   +X in cmd msg
-    	# Battery bumper is right photo
+    	# Battery bumper is right photo (-X)
 		#   -X in cmd msg
 
-        # X from photo is width
-        # Y from photo is height
+        # X from photo is width, starting from left-right
+        # Y from photo is height, starting from top-down
 
         # So +X in cmd msg is -X of photo
-        # and +Y in cmd msg is +Y of photo
+        # and +Y in cmd msg is -Y of photo
 
         x = -(avgx - self._width/2)*self._xfov/self._width
 
@@ -221,6 +236,26 @@ class LandingCamera(threading.Thread):
 
         data = {'xoffset': x, 'yoffset': y, 'distance': z, 'found': True}
         return data
+
+
+class SavePhoto(threading.Thread):
+    '''Thread to save a photo without slowing down main LandingCamera loop.
+       From initial testing, saving takes an avg of 51 ms. With a photo capture
+       speed of 109 ms average and ArUco processing of 83 ms, this can 
+       potentially save 21% processing time or 1 extra photo a second.
+       
+       Need to be cautious of race conditions between saving photo and erasing 
+       prior to taking a new photo.
+    '''
+    
+    def __init__(self, pic, path):
+        super(SavePhoto, self).__init__()
+        self.pic = pic
+        self.path = path
+        self.start()
+        
+    def run(self):
+        cv2.imwrite(self.path, self.pic)
 
 
 '''class AirSensor(threading.Thread):

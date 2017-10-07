@@ -176,9 +176,12 @@ class LoggerDaemon(threading.Thread):
 
 
     def setup_logging(self):
+        '''Initialize the logger with a timestamped name and consistent format.
+        '''
         filename = time.strftime('Log_' + self.drone_info['name'] + '_' +
                                  self.drone_info['mission'] + '_%Y%m%d_%H%M%S.log',
                                  time.localtime())
+        # TODO If Logs doesn't exist, create.
         logging.basicConfig(filename='Logs/' + filename, level=logging.DEBUG,
                             format='%(asctime)s, %(message)s',
                             datefmt='%Y%m%d %H%M%S')
@@ -254,9 +257,8 @@ class LoggerDaemon(threading.Thread):
         print 'entered mission_data_cb'
         # event_dict = copy.deepcopy(arg1)
         # event_json = event_dict
-        # TODO Decide if it should be handled here or in landing_msg_cb in navigator
-        #logging.info('\'mission_data\', ' + ', '.join('\'%s\':%r' % (key,val) \
-        #             for (key,val) in arg1.iteritems()))
+        logging.info('\'mission_data\', ' + ', '.join('\'%s\':%r' % (key,val) \
+                     for (key,val) in arg1.iteritems()))
 
 
     def wifi_data_cb(self, arg1=None):
@@ -409,6 +411,8 @@ class Pilot(object):
         # Altitude relative to starting location
         # All further waypoints will use this altitude
         self.hold_altitude = None
+
+        self.cancel_task = False
 
         self.vehicle = None
         self.sitl = None
@@ -579,7 +583,7 @@ class Pilot(object):
                                       north,
                                       east,
                                       altitude_relative)
-        self.goto_waypoint(location)
+        return self.goto_waypoint(location)
 
 
     def goto_waypoint(self, global_relative, ground_tol=0.8, alt_tol=1.0, speed=50):
@@ -601,7 +605,7 @@ class Pilot(object):
         #TODO: May want to replace simple_goto with something better
         self.vehicle.simple_goto(global_relative, groundspeed=self.groundspeed)
         good_count = 0  # Count that we're actually at the waypoint for a few times in a row
-        while self.vehicle.mode.name == 'GUIDED' and good_count < 3:
+        while (self.vehicle.mode.name == 'GUIDED' and good_count < 3 and not(self._cancel_task)):
             grf = self.vehicle.location.global_relative_frame
             offset = get_ground_distance(grf, global_relative)
             alt_offset = abs(grf.alt - global_relative.alt)
@@ -610,16 +614,24 @@ class Pilot(object):
             else:
                 good_count = 0
             time.sleep(0.2)
-        print 'Arrived at global_relative.'
-        return True
+            
+        if (self._cancel_task):
+            print 'goto_waypoint cancelled.'
+            self._cancel_task = False
+            return False
+        else:
+            print 'Arrived at global_relative.'
+            return True
 
 
     def RTL_and_land(self):
         '''Return to home location and land the drone.'''
         print 'Vehicle {0} returning to home location'.format(self.instance)
-        self.goto_relative(0, 0, 5)
-        print 'Vehicle {0} landing'.format(self.instance)
-        self.vehicle.mode = VehicleMode('LAND')
+        if (self.goto_relative(0, 0, 5)):
+            print 'Vehicle {0} landing'.format(self.instance)
+            self.vehicle.mode = VehicleMode('LAND')
+        else:
+            print 'Vehicle {0} landing cancelled'.format(self.instance)
 
 
     def land_drone(self):
@@ -650,9 +662,9 @@ class Pilot(object):
     		z,	# distance to the target from vehicle in meters
     		0,	# size of target in radians along x-axis
     		0)	# size along y-axis
-        logging.info('\'send_land_message\', \'x offset\': %0.4f, \'y offset\': %0.4f, \'distance\': %0.4f' % (x, y, z))
-    	self.vehicle.send_mavlink(message)
+        self.vehicle.send_mavlink(message)
     	self.vehicle.flush()
+
 
     # def send_distance_message(self, dist):
     #     message = self.vehicle.message_factory.distance_sensor_encode(
@@ -708,15 +720,38 @@ class Navigator(object):
         self.instantiate_pilot()
         self.setup_subs()
         FlaskServer()
-        self.mission_queue = deque([])
+        self.task_queue = deque([])
+        self.task_current = None
         self.event_loop()
 
 
+    def get_proc_id(self, b_only_pid=False):
+        ''' Gets the class name and process id of the thread '''
+        if (b_only_pid == True):
+            return os.getpid()
+        else:
+            return {'name':self.__class__.__name__, 'pid':os.getpid()}
+            
+            
     def load_launch_mission(self):
         '''Load a mission for launching the drone.'''
         with open('launch_mission.json', 'r') as fp:
             mission = json.load(fp)
         return mission
+
+
+    def instantiate_pilot(self):
+        '''Instantiate a pilot object and store it.'''
+        if not self.simulated:
+            self.bringup_ip = 'udp:127.0.0.1:14550'
+	    #self.bringup_ip = 'tcp:127.0.0.1:57600'
+        self.pilot = Pilot(
+                simulated=self.simulated,
+                simulated_landing_camera=self.simulated_landing_camera,
+        )
+        print('Bringup ip: ')
+        print(self.bringup_ip)
+        self.pilot.bringup_drone(connection_string=self.bringup_ip)
 
 
     def event_loop(self):
@@ -725,15 +760,83 @@ class Navigator(object):
         while True:
             try:
                 time.sleep(0.1)
-                if self.mission_queue:
-                    next_mission = self.mission_queue.popleft()
-                    self.execute_mission(next_mission)
+                if self.task_queue:
+                    self.task_current = self.task_queue.popleft()
+                    self.execute_task(self.task_current)
+                    self.task_current = None
                     if self.pilot.vehicle.mode != 'GUIDED':
-                        self.mission_queue = deque([])
+                        self.task_queue = deque([])
 
             except KeyboardInterrupt:
                 self.pilot.RTL_and_land()
-                break
+                break  
+
+
+    def add_mission_top(self, mission_unparsed):
+        '''Parse mission and extract sequence of tasks. Then, add to top of 
+        queue.
+        e.g. Current list_tasks = [1,2,3]  
+             Incoming task = [4,5,6]
+             Resulting list_tasks = [4,5,6,1,2,3]'''
+        list_tasks = self.parse_mission(mission_unparsed)
+        for task in reversed(list_tasks):
+            self.task_queue.appendleft(task)
+    
+    
+    def add_mission(self, mission_unparsed):
+        '''Parse mission and extract sequence of tasks. Then, add to back of 
+        queue.
+        e.g. Current list_tasks = [1,2,3]  
+             Incoming task = [4,5,6]
+             Resulting list_tasks = [1,2,3,4,5,6]'''
+        list_tasks = self.parse_mission(mission_unparsed)
+        self.task_queue.extend(list_tasks)
+
+
+    def parse_mission(self, mission_dict):
+        '''Add GPS coordinates to all the points in a mission dictionary.'''
+        list_tasks = []
+        
+        # Convert all points to full GPS points
+        for name, POI in mission_dict['points'].iteritems():
+            if (all(keys in POI for keys in ['N', 'E', 'D'])):
+                POI['GPS'] = self.meters_to_waypoint(POI)
+            elif (all(keys in POI for keys in ['lat', 'lon', 'alt'])):
+                POI['GPS'] = LocationGlobalRelative(POI['lat'], POI['lon'],
+                                                    POI['alt'])
+            else:
+                print ('ERROR: invalid POI format in mission file %s: %s' % (name, POI))        
+        
+        # Convert all points to a series of GPS coordinate instructions
+        for task in mission_dict['plan']:
+            list_GPS = []
+            if ('points' in task):
+                for point in task['points']:
+                    if (point in mission_dict['points']):
+                        list_GPS.append(mission_dict['points'][point]['GPS'])
+                    else:
+                        print ('ERROR: plan point %s not in mission points' % (point))  
+                        list_tasks = []
+                        break
+                task['path'] = list_GPS
+            list_tasks.append(task)
+            
+        return list_tasks
+        
+
+    def meters_to_waypoint(self, POI):
+        '''Construct a GPS location from a NED point.
+
+        POI should be a dictionary, the returned value is a
+        LocationGlobalRelative object.
+        '''
+        global_rel = relative_to_global(
+                self.pilot.vehicle.home_location,
+                POI['N'],
+                POI['E'],
+                POI['D']
+        )
+        return global_rel
 
 
     def setup_subs(self):
@@ -741,24 +844,36 @@ class Navigator(object):
         print 'setting up subs'
         pub.subscribe(self.launch_cb, 'flask-messages.launch')
         pub.subscribe(self.mission_cb, 'flask-messages.mission')
+        pub.subscribe(self.detour_cb, 'flask-messages.detour')
         pub.subscribe(self.land_cb, 'flask-messages.land')
         pub.subscribe(self.RTL_cb, 'flask-messages.RTL')
         pub.subscribe(self.find_target_and_land_cb, 'flask-messages.find_target_and_land')
-
-
+        
+        
+    ### CALLBACKS FOR NAVIGATOR ###
+    def detour_cb(self, arg1=None):
+        '''Pushes current task back onto top of queue and adds provided mission 
+        in its place. After provided mission is accomplished, returns to 
+        previous task.'''
+        if not(self.task_current == None):
+            self.task_queue.appendleft(self.task_current)
+        mission_dict = arg1
+        self.add_mission_top(mission_dict)
+        self._cancel_task = True
+    
+    
     def mission_cb(self, arg1=None):
         '''Add an incoming mission to the mission queue.'''
         print 'Navigator entered mission_cb'
         mission_dict = arg1
-        self.mission_queue.append(mission_dict)
+        self.add_mission(mission_dict)
 
 
     def launch_cb(self, arg1=None):
         '''Launch the drone when a message is recieved on the launch topic.'''
         print 'Navigator entered launch callback'
         launch_mission = self.launch_mission
-        self.mission_queue.append(launch_mission)
-        #self.liftoff(5)
+        self.add_mission(launch_mission)
 
 
     def land_cb(self, arg1=None):
@@ -786,7 +901,7 @@ class Navigator(object):
                 },
             ],
         }
-        self.mission_queue.append(mission)
+        self.add_mission(mission)
 
 
     def RTL_cb(self, arg1=None):
@@ -794,125 +909,46 @@ class Navigator(object):
         print 'Navigator entered RTL callback'
         self.pilot.return_to_launch()
         self.pilot.land_drone()
-
-
-    # add_detour_cb
-    # Pushes current mission back onto top of queue and adds provided mission
-    # in its place. After provided mission is accomplished, returns to previous
-    # mission.
-    def add_detour_cb(self, arg1=None):
-         return       
         
+    ### CALLBACKS FOR NAVIGATOR END ###
         
-    # add_mission_cb
-    # Adds provided mission to back of queue.
-    def add_mission_cb(self, arg1=None):
-        return
+    def execute_task(self, task):
+        '''Execute a task and send logging data to the logger.
 
-    def stop(self):
-        '''Shut down the pilot/vehicle.'''
-        self.pilot.stop()
-
-
-    def instantiate_pilot(self):
-        '''Instantiate a pilot object and store it.'''
-        if not self.simulated:
-            self.bringup_ip = 'udp:127.0.0.1:14550'
-	    #self.bringup_ip = 'tcp:127.0.0.1:57600'
-        self.pilot = Pilot(
-                simulated=self.simulated,
-                simulated_landing_camera=self.simulated_landing_camera,
-        )
-        print('Bringup ip: ')
-        print(self.bringup_ip)
-        self.pilot.bringup_drone(connection_string=self.bringup_ip)
-
-
-    def launch(self, event):
-        '''Tell the pilot to arm the drone and take off.'''
-        #altitude should be in meters
-        altitude = self.takeoff_alt
-        if not self.pilot.vehicle.armed:
-            self.pilot.arm_and_takeoff(altitude)
-            print 'Vehicle {0} ready for guidance'.format(self.pilot.instance)
-            return
-        print 'Vehicle {0} already armed'.format(self.pilot.instance)
-
-
-    def parse_mission(self, mission_dict):
-        '''Add GPS coordinates to all the points in a mission dictionary.'''
-        # TODO Why is this needed??
-        if (mission_dict['plan'][0]['action'] == 'launch'):
-            return mission_dict
-
-        for name, POI in mission_dict['points'].iteritems():
-            if (all(keys in POI for keys in ['N', 'E', 'D'])):
-                POI['GPS'] = self.meters_to_waypoint(POI)
-            elif (all(keys in POI for keys in ['lat', 'lon', 'alt'])):
-                POI['GPS'] = LocationGlobalRelative(POI['lat'], POI['lon'],
-                                                    POI['alt'])
-            else:
-                print ('Error parsing POI of mission file')
-
-        return mission_dict
-
-
-    def meters_to_waypoint(self, POI):
-        '''Construct a GPS location from a NED point.
-
-        POI should be a dictionary, the returned value is a
-        LocationGlobalRelative object.
-        '''
-        global_rel = relative_to_global(
-                self.pilot.vehicle.home_location,
-                POI['N'],
-                POI['E'],
-                POI['D']
-        )
-        return global_rel
-
-
-    def execute_mission(self, unparsed_mission):
-        '''Execute an un-parsed mission and send logging data to the logger.
-
-        unparsed_mission -- a mission in the form of a dictionary, for example
-                            from the FlaskServer.
+        task -- a task in the form of a dictionary
         '''
         try:
-            mission = self.parse_mission(unparsed_mission)
-            self.current_mission = mission
+            if (task['action'] != 'launch') and (self.mode != 'GUIDED'):
+                print 'aborting mission due to check'
+                self.task_queue = deque([])
+                return
 
-            for event in mission['plan']:
-                if (mission['plan'][0]['action'] != 'launch') and (self.pilot.vehicle.mode != 'GUIDED'):
-                    print 'aborting mission due to check'
-                    self.mission_queue = deque([])
-                    return
+            print 'executing task {}'.format(task['action'])
+            action = getattr(self, task['action'])
 
-                print 'mission executing action {}'.format(event['action'])
-                action = getattr(self, event['action'])
+            #publish event start
+            task_start_dict = {
+                'task':task['action'],
+                'action':'start',
+            }
+            pub.sendMessage(
+                'nav-messages.mission-data',
+                arg1=task_start_dict
+            )
 
-                #publish event start
-                event_start_dict = {
-                    'task':event['action'],
-                    'action':'start',
-                }
-                pub.sendMessage(
-                    'nav-messages.mission-data',
-                    arg1=event_start_dict
-                )
 
-                #do the thing
-                action(event)
+            #do the thing
+            action(task)
 
-                #publish event end
-                event_end_dict = {
-                    'task':event['action'],
-                    'action':'end',
-                }
-                pub.sendMessage(
-                    'nav-messages.mission-data',
-                    arg1=event_end_dict
-                )
+            #publish event end
+            task_end_dict = {
+                'task':task['action'],
+                'action':'end',
+            }
+            pub.sendMessage(
+                'nav-messages.mission-data',
+                arg1=task_end_dict
+            )
 
         except Exception as e:
             print 'Exception! RTL initiated', e
@@ -957,15 +993,22 @@ class Navigator(object):
         '''
         self.pilot.land_drone()
 
+    def launch(self, event):
+        '''Tell the pilot to arm the drone and take off.'''
+        #altitude should be in meters
+        altitude = self.takeoff_alt
+        if not self.pilot.vehicle.armed:
+            self.pilot.arm_and_takeoff(altitude)
+            print 'Vehicle {0} ready for guidance'.format(self.pilot.instance)
+            return
+        print 'Vehicle {0} already armed'.format(self.pilot.instance)
 
-    def get_proc_id(self, b_only_pid=False):
-        ''' Gets the class name and process id of the thread '''
-        if (b_only_pid == True):
-            return os.getpid()
-        else:
-            return {'name':self.__class__.__name__, 'pid':os.getpid()}
 
-
+    def stop(self):
+        '''Shut down the pilot/vehicle.'''
+        self.pilot.stop()
+        
+    
     def find_target_and_land_drone(self, event):
         ''' Searches for a target and then attempts to land on the target. '''
 
@@ -1031,27 +1074,6 @@ class Navigator(object):
         time_switch = 5
         while(1):
             if (self.target_found == True):
-                # self.pilot.vehicle.parameters['LAND_SPEED'] = 50 #30 to 200 in increments of 10
-                # self.pilot.vehicle.parameters['PLND_TYPE'] = 1
-                # self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
-                # self.pilot.vehicle.flush()
-                #
-		        # while ((self.pilot.vehicle.parameters['PLND_ENABLED'] != 1) and  (time.time() - time_start < time_switch)):
-			    #     self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
-			    #     time.sleep(0.5)
-
-                # if (self.pilot.vehicle.parameters['PLND_ENABLED'] == 1):
-                #     logging.info('\'find_target_and_land_drone\', Turned PLND_ENABLED on)
-                # else:
-                #     logging.info('\'find_target_and_land_drone\', Turning on PLND_ENABLED timed out after 5 seconds)
-
-
-                # set rangefinder
-                # self.pilot.vehicle.parameters['RNGFND_TYPE'] = 10
-                # self.pilot.vehicle.parameters['RNGFND_MIN_CM'] = 1
-                # self.pilot.vehicle.parameters['RNGFND_MAX_CM'] = 10000
-                # self.pilot.vehicle.parameters['RNGFND_GNDCLEAR'] = 5
-
                 self.pilot.vehicle.mode = VehicleMode('LAND')
                 self.pilot.vehicle.flush()
                 
