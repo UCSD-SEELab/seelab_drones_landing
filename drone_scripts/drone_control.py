@@ -687,7 +687,7 @@ class Navigator(object):
 
     '''
 
-    def __init__(self, simulated=False, simulated_landing_camera=False, takeoff_alt=2):
+    def __init__(self, simulated=False, simulated_landing_camera=False, takeoff_alt=5):
         '''Construct an instance of the Navigator class.
 
         simulated -- Are we running this on the simulator?
@@ -697,6 +697,7 @@ class Navigator(object):
 
         print 'I\'m a Navigator!'
         self._waypoint_index = 0
+        self._cancel_mission = False
         self.takeoff_alt = takeoff_alt
         self.simulated = simulated
         self.simulated_landing_camera = simulated_landing_camera
@@ -794,6 +795,19 @@ class Navigator(object):
         self.pilot.return_to_launch()
         self.pilot.land_drone()
 
+
+    # add_detour_cb
+    # Pushes current mission back onto top of queue and adds provided mission
+    # in its place. After provided mission is accomplished, returns to previous
+    # mission.
+    def add_detour_cb(self, arg1=None):
+         return       
+        
+        
+    # add_mission_cb
+    # Adds provided mission to back of queue.
+    def add_mission_cb(self, arg1=None):
+        return
 
     def stop(self):
         '''Shut down the pilot/vehicle.'''
@@ -907,13 +921,13 @@ class Navigator(object):
             self.stop()
 
 
-    def go(self, event):
+    def go(self, event, ground_tol_in=0.8):
         '''Execute a Go action with a mission event.'''
         name = event['points'][0]
         point = self.current_mission['points'][name]
         global_rel = point['GPS']
         print 'Moving to {}'.format(name)
-        self.pilot.goto_waypoint(global_rel, speed=70)
+        self.pilot.goto_waypoint(global_rel, ground_tol=ground_tol_in, speed=70)
 
 
     def patrol(self, event):
@@ -1038,6 +1052,9 @@ class Navigator(object):
                 # self.pilot.vehicle.parameters['RNGFND_MAX_CM'] = 10000
                 # self.pilot.vehicle.parameters['RNGFND_GNDCLEAR'] = 5
 
+                self.pilot.vehicle.mode = VehicleMode('LAND')
+                self.pilot.vehicle.flush()
+                
                 print 'Found target, start landing'
                 logging.info('\'find_target_and_land_drone\', Found target and start landing')
                 break
@@ -1054,7 +1071,7 @@ class Navigator(object):
                             # required
 
         time_start = time.time()
-        timeout = 5     # timeout of 5 seconds
+        timeout = 10     # timeout of 5 seconds
         'Start landing'
         while (self.landing_state in [2,3,4]):
             if (self.target_found == False):
@@ -1068,7 +1085,7 @@ class Navigator(object):
             else:
                 time_start = time.time()
 
-	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
+	        if not(self.pilot.vehicle.mode == VehicleMode('GUIDED') or self.pilot.vehicle.mode == VehicleMode('LAND') ):
 		        self.landing_state = 10
 		        break
 

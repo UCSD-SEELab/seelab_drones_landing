@@ -202,15 +202,25 @@ class DroneCoordinator(object):
                 'target_loc_hi': {
                     'lat': gps_lat,
                     'lon': gps_lon,
-                    'alt': 5,
+                    'alt': 15,
                 },
                 'target_loc_lo': {
                     'lat': gps_lat,
                     'lon': gps_lon,
-                    'alt': 3,
+                    'alt': 5,
                 },
+                'start_loc_hi': {
+                    'N': 0,
+                    'E': 0,
+                    'D': 15
+                    }
             },
             'plan': [
+                {
+                    'action': 'go',
+                    'points': ['start_loc_hi'],
+                    'repeat': 0,
+                },
                 {
                     'action': 'go',
                     'points': ['target_loc_hi'],

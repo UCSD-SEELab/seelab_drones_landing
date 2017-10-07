@@ -17,7 +17,8 @@ drone = None
 try:
   drone = drone_control.Navigator(
           simulated=SIMULATED,
-          simulated_landing_camera=SIM_LANDING_CAM
+          simulated_landing_camera=SIM_LANDING_CAM,
+          takeoff_alt=5
   )
   
 except KeyboardInterrupt:

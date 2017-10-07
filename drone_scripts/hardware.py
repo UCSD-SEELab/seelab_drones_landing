@@ -61,17 +61,17 @@ class LandingCamera(threading.Thread):
 
                 self._take_pic()
                 results = self._find_target(self._rawCapt.array)
-                if (results['found'] == True):
-                    path = str(sys.path[0]) + '/Found_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                    cv2.imwrite(path, self._rawCapt.array)
-                    print ("Hardware.py: Target found")
+                #if (results['found'] == True):
+                #    path = str(sys.path[0]) + '/Found_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                #    cv2.imwrite(path, self._rawCapt.array)
+                #    print ("Hardware.py: Target found")
 
-                else:
-                    path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
-                    print ("Hardware.py: Target not found")
-                    if ((take_pic_cnt) >= take_pic_time):
-                        cv2.imwrite(path, self._rawCapt.array)
-                        take_pic_cnt = 0
+                #else:
+                #    path = str(sys.path[0]) + '/Fail_' + strftime("%Y_%m_%d__%I_%M_%S", localtime()) + '.jpg'
+                #    print ("Hardware.py: Target not found")
+                #    if ((take_pic_cnt) >= take_pic_time):
+                #        cv2.imwrite(path, self._rawCapt.array)
+                #        take_pic_cnt = 0
 
                 if (cameratest == True):
                     # take picture but send fake messages to see if camera causes interference
@@ -80,8 +80,8 @@ class LandingCamera(threading.Thread):
                 else:
                     self._callback(results)
 
-                take_pic_cnt = take_pic_cnt + 1;
-                time.sleep(0.1)
+                #take_pic_cnt = take_pic_cnt + 1;
+                time.sleep(0.01)
 
             self._camera.close()
 
@@ -147,7 +147,7 @@ class LandingCamera(threading.Thread):
 
     def _find_target(self, pic):
         corners, ids, rejects = aruco.detectMarkers(pic, self._aruco_dic)
-        self._rawCapt.array = aruco.drawDetectedMarkers(pic, corners, ids)
+        #self._rawCapt.array = aruco.drawDetectedMarkers(pic, corners, ids)
 
         numMarkers = len(corners)
 
@@ -189,17 +189,25 @@ class LandingCamera(threading.Thread):
         avgy = sumy/4
 
 	    # Adjusting for camera rotation
-	    # actual x (North) is y
-	    # actual y (East) is -x
-	    # following commented out is without adjusting
-        # x = (avgx - self._width/2)*self._xfov/self._width
-        # y = (avgy - self._height/2)*self._yfov/self._height
+	    # From testing on 6 Oct 2017
+        # Red arms are top photo
+		#   +Y in cmd msg
+    	# White arms are bottom photo
+		#   -Y in cmd msg
+    	# Battery connector is left photo
+		#   +X in cmd msg
+    	# Battery bumper is right photo
+		#   -X in cmd msg
 
-        # y = -((avgx - self._width/2)*self._xfov/self._width)
-        # 9/7/17 above y changed to below for testing
-        y = (avgx - self._width/2)*self._xfov/self._width
+        # X from photo is width
+        # Y from photo is height
 
-        x = (avgy - self._height/2)*self._yfov/self._height
+        # So +X in cmd msg is -X of photo
+        # and +Y in cmd msg is +Y of photo
+
+        x = -(avgx - self._width/2)*self._xfov/self._width
+
+        y = -(avgy - self._height/2)*self._yfov/self._height
 
         # TODO Update with more accurate way to calculate distance
         side1 = self.distance(corners[0][0], corners[0][1], corners[1][0], corners[1][1])
