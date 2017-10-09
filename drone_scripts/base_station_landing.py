@@ -173,8 +173,10 @@ class DroneCoordinator(object):
         return r
 
 
-    def send_mission(self, mission_json, drone_addr):
+    def send_mission(self, mission_json, drone_addr=None):
         """Send a mission (JSON string) to the drone at drone_address."""
+        if not(drone_addr):
+            drone_addr = self.primary_drone_addr
         url = self.make_url(drone_addr, 'mission')
         mission_string = json.dumps(mission_json)
         r = requests.post(url, mission_string)
@@ -192,6 +194,67 @@ class DroneCoordinator(object):
         
         return r
     
+
+    def create_launch_land_test(self, target=None):
+        mission_dict = { 
+            'points': {
+                'start_loc_hi': {
+                    'N': 0,
+                    'E': 0,
+                    'D': 25
+                    },
+                'start_loc_low': {
+                    'N': 0,
+                    'E': 0,
+                    'D': 7.5
+                    }
+            },
+            'plan': [
+                {
+                    'action': 'launch',
+                    'points': [],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'go',
+                    'points': ['start_loc_hi'],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'go',
+                    'points': ['start_loc_low'],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'find_target_and_land_drone',
+                    'points': [],
+                    'target': target,
+                },
+                                {
+                    'action': 'launch',
+                    'points': [],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'go',
+                    'points': ['start_loc_hi'],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'go',
+                    'points': ['start_loc_low'],
+                    'repeat': 0,
+                },
+                {
+                    'action': 'find_target_and_land_drone',
+                    'points': [],
+                    'target': target,
+                },
+            ],
+        }
+        
+        return mission_dict
+
 
     def create_find_target_and_land_mission(self, gps_lat, gps_lon, target=None):
         """Create a mission (JSON string) for going to a waypoint and then
@@ -290,7 +353,7 @@ if __name__ == '__main__':
     #args = parser.parse_args()
 
     dc = DroneCoordinator('192.168.43.162') #args.primary_ip)
-
+    test_mission = dc.create_launch_land_test()
     #dc.launch_drone(dc.primary_drone_addr)
     
     interact(local=locals())

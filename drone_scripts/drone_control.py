@@ -607,7 +607,7 @@ class Pilot(object):
         #TODO: May want to replace simple_goto with something better
         self.vehicle.simple_goto(global_relative)
         good_count = 0  # Count that we're actually at the waypoint for a few times in a row
-        while (self.vehicle.mode.name == 'GUIDED' and good_count < 3 and not(self._cancel_task)):
+        while (self.vehicle.mode.name == 'GUIDED' and good_count < 3 and not(self.cancel_task)):
             grf = self.vehicle.location.global_relative_frame
             offset = get_ground_distance(grf, global_relative)
             alt_offset = abs(grf.alt - global_relative.alt)
@@ -617,9 +617,9 @@ class Pilot(object):
                 good_count = 0
             time.sleep(0.2)
             
-        if (self._cancel_task):
+        if (self.cancel_task):
             print 'goto_waypoint cancelled.'
-            self._cancel_task = False
+            self.cancel_task = False
             return False
         else:
             print 'Arrived at global_relative.'
@@ -766,6 +766,8 @@ class Navigator(object):
                     self.task_current = self.task_queue.popleft()
                     self.execute_task(self.task_current)
                     self.task_current = None
+                    print ('event_loop: task_queue is %d long' % len(self.task_queue))
+                    print()
                     if self.pilot.vehicle.mode != 'GUIDED':
                         self.task_queue = deque([])
 
@@ -783,6 +785,7 @@ class Navigator(object):
         list_tasks = self.parse_mission(mission_unparsed)
         for task in reversed(list_tasks):
             self.task_queue.appendleft(task)
+        print ('add_mission_top: task_queue is %d long' % len(self.task_queue))
     
     
     def add_mission(self, mission_unparsed):
@@ -793,11 +796,21 @@ class Navigator(object):
              Resulting list_tasks = [1,2,3,4,5,6]'''
         list_tasks = self.parse_mission(mission_unparsed)
         self.task_queue.extend(list_tasks)
+        print ('add_mission: task_queue is %d long' % len(self.task_queue))
 
 
     def parse_mission(self, mission_dict):
         '''Add GPS coordinates to all the points in a mission dictionary.'''
         list_tasks = []
+        
+        if (self.pilot.vehicle.home_location == None):
+            cmds = self.pilot.vehicle.commands
+            cmds.download()
+            cmds.wait_ready()
+
+        #if mission_dict['plan'][0]['action'] == 'launch':
+        #    list_tasks.append(mission_dict['plan'][0])
+        #    return list_tasks
         
         # Convert all points to full GPS points
         for name, POI in mission_dict['points'].iteritems():
@@ -861,7 +874,7 @@ class Navigator(object):
             self.task_queue.appendleft(self.task_current)
         mission_dict = arg1
         self.add_mission_top(mission_dict)
-        self._cancel_task = True
+        self.pilot.cancel_task = True
     
     
     def mission_cb(self, arg1=None):
@@ -920,7 +933,7 @@ class Navigator(object):
         task -- a task in the form of a dictionary
         '''
         try:
-            if (task['action'] != 'launch') and (self.mode != 'GUIDED'):
+            if (task['action'] != 'launch') and (self.pilot.vehicle.mode != VehicleMode('GUIDED')):
                 print 'aborting mission due to check'
                 self.task_queue = deque([])
                 return
@@ -959,23 +972,21 @@ class Navigator(object):
             self.stop()
 
 
-    def go(self, event, ground_tol_in=0.8):
+    def go(self, task, ground_tol_in=0.8):
         '''Execute a Go action with a mission event.'''
-        name = event['points'][0]
-        point = self.current_mission['points'][name]
-        global_rel = point['GPS']
-        print 'Moving to {}'.format(name)
+        global_rel = task['path'][0]
+        #print 'Moving to {}'.format(global_rel)
         self.pilot.goto_waypoint(global_rel, ground_tol=ground_tol_in)
 
-
-    def patrol(self, event):
+    #TODO Fix Patrol
+    def patrol(self, task):
         '''Execute a Patrol action with a mission event.'''
-        count = event['repeat']
+        count = task['repeat']
         for i in range(count):
             print 'patrolling...'
-            for name in event['points']:
+            for name in task['points']:
 		print 'going to {}'.format(name)
-                point = self.current_mission['points'][name]
+                point = task['points'][name]
                 self.pilot.goto_waypoint(point['GPS'])
         print 'Finished patrolling'
 
@@ -1121,9 +1132,9 @@ class Navigator(object):
         pub.unsubscribe(self.landing_adjustment_cb, 'sensor-messages.landingcam-data')
 
         if (self.landing_state == 9):
-            print ('Return to home')
-            logging.info('\'find_target_and_land_drone\', Mission aborted. Return to home.')
-            self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
+            print ('Landing aborted. Continuing mission.')
+            logging.info('\'find_target_and_land_drone\', Landing aborted. Continuing mission.')
+            #self.pilot.vehicle.mode = VehicleMode('RTL')  # TODO Change to a more
                                                     # controlled fly to waypoint
                                                     # and land
         elif (self.landing_state == 5):
