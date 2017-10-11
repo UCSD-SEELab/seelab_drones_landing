@@ -683,21 +683,26 @@ class Pilot(object):
     #     self.vehicle.send_mavlink(message)
     #     self.vehicle.flush()
 
-    def send_circle_command(self, dist=3):
-        n_turns = 3
-        message = self.vehicle.message_factory.mav_cmd_nav_loiter_turns_encode(
-            3,      # Number of turns
-            0,      # Empty (unused)
-            dist,      # Radius (m)
-            0,      # Desired yaw angle (unused)
-            0,      # Target latitude. If 0, vehicle will use current lat
-            0,      # Target longitude. If 0, vehicle will use current lon
-            0       # Target altitude. If 0, vehicle will use current alt
-        )
-        logging.info('\'send_circle_command\', \'n_turns\': %d at %0.1f m' % (n_turns, dist))
-        self.vehicle.send_mavlink(message)
-        self.vehicle.flush()
+    def send_circle_command(self, dist=1.5, n_turns=3):
 
+        # NOTE: new way to encode
+        # msg = self.vehicle.message_factory.command_long_encode(
+        #     0, 0,    # target_system, target_component
+        #     mavutil.mavlink.MAV_CMD_NAV_LOITER_TURNS, #command
+        #     0, #confirmation
+        #     n_turns,    # param 1 number of 360 deg turnsa
+        #     0,          # param 2 not used
+        #     dist,          # param 3 radius, NOTE: apparently not supported
+        #     0, # param 4 not used
+        #     0, 0, 0)    # param 5 ~ 7 current Lat, Lon, Alt
+        # logging.info('\'send_circle_command\', \'n_turns\': %d at %0.1f m' % (n_turns, dist))
+        # self.vehicle.send_mavlink(msg)
+        # self.vehicle.flush()
+
+        self.vehicle.parameters['CIRCLE_RADIUS'] = 150    # 150 cm radius
+        self.vehicle.parameters['CIRCLE_RATE'] = 45       # +45 deg/s CW
+        self.vehicle.mode = VehicleMode('CIRCLE')         # circles with nose facing pointed to a point set ahead
+        self.vehicle.flush()
 
     def get_proc_id(self, b_only_pid=False):
         ''' Gets the class name and process id of the thread '''
@@ -1092,9 +1097,6 @@ class Navigator(object):
         #     print("Unsuccessful switch to CIRCLE mode")
         #     self.pilot.vehicle.mode = VehicleMode('GUIDED')
 
-
-        # self.pilot.send_circle_command(3)
-
         # self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
         # self.pilot.vehicle.parameters['PLND_TYPE'] = 1
         # self.pilot.vehicle.flush()
@@ -1116,10 +1118,8 @@ class Navigator(object):
             time_elapsed = time.time() - time_start
 
             if (time_elapsed >= timeout and self.pilot.vehicle.mode == VehicleMode('GUIDED')):
-                self.pilot.vehicle.parameters['CIRCLE_RADIUS'] = 150    # 150 cm radius
-                self.pilot.vehicle.parameters['CIRCLE_RATE'] = 45       # +45 deg/s CW
-                self.pilot.vehicle.mode = VehicleMode('CIRCLE')         # circles with nose facing pointed to a point set ahead
-                self.pilot.vehicle.flush()
+                # default 3 turns with 1.5 m radius
+                self.pilot.send_circle_command()
                 print 'Target not found, begin circling'
                 logging.info('\'find_target_and_land_drone\', Target not found in %d seconds, begin circle' % time_elapsed)
                 time_start = time.time()
