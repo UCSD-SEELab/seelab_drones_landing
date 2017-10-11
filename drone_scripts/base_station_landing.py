@@ -18,8 +18,9 @@ primary_ip      -- the IP of the primary drone
 """
 
 import math
-from models import *
+import threading
 import numpy as np
+import pprint
 from code import interact
 from contextlib import contextmanager
 import nav_utils
@@ -29,18 +30,18 @@ import json
 import time
 from MissionGenerator import MissionGenerator
 from collections import deque
+import gdp_access
 
 
-class DroneCoordinator(object):
+class DroneCoordinator(threading.Thread):
     """
-    A class to coordinate multiple instances of drone_control.py
-
-    This can be imported from other scripts if needed, but is currently set up
-    to be run from the command line, as described at the top of the file. 
-
+    A service to coordinate multiple instances of drone_control.py
+    
+    Instances of DroneCoordinator can also be called to directly enforce action
+    on a drone
     """
 
-    def __init__(self, primary_drone_ip):
+    def __init__(self, primary_drone_ip, gdp_service=None):
         """
         Initialize an instance of DroneCoordinator
 
@@ -49,13 +50,48 @@ class DroneCoordinator(object):
         primary_height and secondary_height, the config file that is read, or
         how the addresses are constructed from the IPs.
         """
-        
+        super(DroneCoordinator, self).__init__()
         self.read_config('../database_files/mission_setup.json')
         self.primary_drone_addr = 'http://' + primary_drone_ip + ':5000/'
         self.fly_height = 5
         self.mission_generator = MissionGenerator()
+        self.gdp_service = gdp_service
+        self._stop_event = threading.Event()
+        self._stop_event.clear()
+        self.start()
+        
+    
+    def run(self):
+        gps_home = [37.863552, -122.249600]
+        list_signpost_anomalies = []
+        while not(self.stopped()):
+            # Process information from gdp service
+            if ((self.gdp_service != None) and self.gdp_service.isAlive()):
+                b_trigger, list_signposts = self.gdp_service.check_trigger()
+                if (b_trigger):
+                    list_signpost_anomalies = list(set(list_signpost_anomalies.extend(list_signposts)))
+            
+            if (len(list_signpost_anomalies) > 0):
+                for signpost_target in list_signpost_anomalies:
+                    print('Anomaly detected. Go to %s' % (signpost_target['gps']))
+                    '''
+                    mission_to = self.create_find_target_and_land_mission(gps=signpost_target['gps'],
+                                                                          b_download=True)
+                    mission_back = self.create_find_target_and_land_mission(gps=gps_home,
+                                                                          b_download=False)
+                    '''
+                list_signpost_anomalies = []
+                print('All anomaly data collected. Go to home at %s' % (gps_home))
+                
+                
+            time.sleep(0.1)
+    
+    def stop(self):
+        self._stop_event.set()
 
-
+    def stopped(self):
+        return self._stop_event.is_set()    
+    
     def generate_corner_banana(self):
         """Sometimes you need a corner banana"""
         intervals = range(0, 11, 2)
@@ -256,29 +292,73 @@ class DroneCoordinator(object):
         return mission_dict
 
 
-    def create_find_target_and_land_mission(self, gps_lat, gps_lon, target=None):
+    def create_find_target_and_land_mission(self, gps=None, rel=None, target=None, b_download=False):
         """Create a mission (JSON string) for going to a waypoint and then
         initializing the find_target_and_land mission and return it.
         """
-        mission_dict = { 
-            'points': {
+        if (gps != None):
+            targets = {
                 'target_loc_hi': {
-                    'lat': gps_lat,
-                    'lon': gps_lon,
-                    'alt': 15,
+                    'lat': gps[0],
+                    'lon': gps[1],
+                    'alt': 20,
                 },
                 'target_loc_lo': {
-                    'lat': gps_lat,
-                    'lon': gps_lon,
-                    'alt': 5,
+                    'lat': gps[0],
+                    'lon': gps[1],
+                    'alt': 7,
                 },
                 'start_loc_hi': {
                     'N': 0,
                     'E': 0,
-                    'D': 15
-                    }
-            },
+                    'D': 20
+                }
+            }
+        elif (rel != None):
+            targets = {
+                'target_loc_hi': {
+                    'N': rel[0],
+                    'E': rel[1],
+                    'D': 20,
+                },
+                'target_loc_lo': {
+                    'N': rel[0],
+                    'E': rel[1],
+                    'D': 7,
+                },
+                'start_loc_hi': {
+                    'N': 0,
+                    'E': 0,
+                    'D': 20
+                }
+            }
+        else:
+            targets = {
+                'target_loc_hi': {
+                    'N': 0,
+                    'E': 0,
+                    'D': 20,
+                },
+                'target_loc_lo': {
+                    'N': 0,
+                    'E': 0,
+                    'D': 7,
+                },
+                'start_loc_hi': {
+                    'N': 0,
+                    'E': 0,
+                    'D': 20
+                }
+            }
+                
+        mission_dict = { 
+            'points': targets,
             'plan': [
+                {   
+                    'action': 'launch',
+                    'points': [],
+                    'repeat': 0,
+                },
                 {
                     'action': 'go',
                     'points': ['start_loc_hi'],
@@ -299,6 +379,7 @@ class DroneCoordinator(object):
                     'points': [],
                     'target': target,
                 },
+                # add action for downloading data
             ],
         }
         
@@ -346,14 +427,72 @@ class DroneCoordinator(object):
         r = requests.get(url)
         return r
 
+def run_test():
+    gps_home = [37.863552, -122.249600]
+    gps_signpost = [37.863636, -122.249353]
+    
+    mission_to = dc.create_find_target_and_land_mission(gps=gps_signpost, b_download=False)
+    mission_back = dc.create_find_target_and_land_mission(gps=gps_home, b_download=False)
+    
+    for t in xrange(5,0,-1):
+        print(t)
+        time.sleep(1)   
+    
+    dc.send_mission(mission_to)
+    dc.send_mission(mission_back)
 
 if __name__ == '__main__':
     #parser = argparse.ArgumentParser()
     #parser.add_argument('primary_ip')
     #args = parser.parse_args()
 
-    dc = DroneCoordinator('192.168.43.162') #args.primary_ip)
-    test_mission = dc.create_launch_land_test()
+    DEBUG = False
+    
+    if not(DEBUG):
+        # Initialize Pretty Printer for an eye-pleasing interface
+        pp = pprint.PrettyPrinter(indent=4)
+        
+        # Initialize GDP interface
+        list_addr_base = [#'edu.berkeley.eecs.c098e5120003']#,
+                          #'edu.berkeley.eecs.c098e5120011',
+                          'edu.berkeley.eecs.c098e512000a']
+                          #'edu.berkeley.eecs.c098e5120010']                  
+        list_addr_sensors = ['signpost_gps.v0-0-1',
+                             'signpost_energy.v0-0-1',
+                             'signpost_radio.v0-0-1',
+                             #'signpost_audio_frequency.v0-0-1',
+                             'anomalies.v0-0-1']                       
+                             #'signpost_microwave_radar.v0-0-1',
+                             #'signpost_ambient.v0-0-1',
+                             #'signpost_ucsd_air_quality.v0-0-1']
+        list_id_sensors = ['signpost_gps',
+                           'signpost_energy',
+                           'signpost_radio',
+                           'signpost_audio_frequency',
+                           'anomalies']
+                           #'signpost_microwave_radar',
+                           #'signpost_ambient',
+                           #'signpost_ucsd_air_quality']
+        list_addr_dict = []
+        for addr_base in list_addr_base:
+            for ind, addr_sensor in enumerate(list_addr_sensors):
+                temp = {'id_signpost':addr_base, 
+                        'id_sensor':list_id_sensors[ind], 
+                        'addr':(addr_base + '.' + addr_sensor)}
+                list_addr_dict.append(temp)
+        
+        gdp_processor = gdp_access.GDPDataProcessor(list_addr_dict)
+    else:
+        gdp_processor = None
+    
+    # Initialize Drone Coordinator
+    dc = DroneCoordinator('192.168.43.162', gdp_service=gdp_processor)  #args.primary_ip)
+    #test_mission = dc.create_launch_land_test()
     #dc.launch_drone(dc.primary_drone_addr)
     
-    interact(local=locals())
+    #interact(local=locals())
+    time.sleep(120)
+    
+    if not(DEBUG):
+        gdp_processor.stop()
+    

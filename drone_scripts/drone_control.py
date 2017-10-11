@@ -683,6 +683,21 @@ class Pilot(object):
     #     self.vehicle.send_mavlink(message)
     #     self.vehicle.flush()
 
+    def send_circle_command(self, dist=3):
+        n_turns = 3
+        message = self.vehicle.message_factory.mav_cmd_nav_loiter_turns_encode(
+            3,      # Number of turns
+            0,      # Empty (unused)
+            dist,      # Radius (m)
+            0,      # Desired yaw angle (unused)
+            0,      # Target latitude. If 0, vehicle will use current lat
+            0,      # Target longitude. If 0, vehicle will use current lon
+            0       # Target altitude. If 0, vehicle will use current alt
+        )
+        logging.info('\'send_circle_command\', \'n_turns\': %d at %0.1f m' % (n_turns, dist))
+        self.vehicle.send_mavlink(message)
+        self.vehicle.flush()
+
 
     def get_proc_id(self, b_only_pid=False):
         ''' Gets the class name and process id of the thread '''
@@ -767,8 +782,11 @@ class Navigator(object):
                     self.execute_task(self.task_current)
                     self.task_current = None
                     print ('event_loop: task_queue is %d long' % len(self.task_queue))
-                    print()
-                    if self.pilot.vehicle.mode != 'GUIDED':
+                    for ind, task in enumerate(self.task_queue):
+                        print('            task %d: %s' % (ind, task))
+                    print(' ')
+                    if ((self.pilot.vehicle.mode != 'GUIDED') and (self.pilot.vehicle.mode != 'LAND')):
+                        print('event_loop: vechile mode %s is invalid!' % (self.pilot.vehicle.mode))
                         self.task_queue = deque([])
 
             except KeyboardInterrupt:
@@ -1010,12 +1028,15 @@ class Navigator(object):
         '''Tell the pilot to arm the drone and take off.'''
         #altitude should be in meters
         altitude = self.takeoff_alt
-        if not self.pilot.vehicle.armed:
+        if (not(self.pilot.vehicle.armed)):
             self.pilot.arm_and_takeoff(altitude)
             print 'Vehicle {0} ready for guidance'.format(self.pilot.instance)
             return
+        elif  (self.pilot.vehicle.mode != 'GUIDED'):
+            self.pilot.vehicle.mode = 'GUIDED'
+            print 'Vehicle {0} ready for guidance'.format(self.pilot.instance)
+            return
         print 'Vehicle {0} already armed'.format(self.pilot.instance)
-
 
     def stop(self):
         '''Shut down the pilot/vehicle.'''
@@ -1053,28 +1074,28 @@ class Navigator(object):
 
 
         print 'Start search for target'
-
+        
+        
         # TODO Add movement during initial search
         # Michael: I think this will work. We can test when we need.
-        '''self.pilot.vehicle.parameters['CIRCLE_RADIUS'] = 300    # 300 cm radius
-        self.pilot.vehicle.parameters['CIRCLE_RATE'] = 15       # +15 deg/s CW
+        self.pilot.vehicle.parameters['CIRCLE_RADIUS'] = 150    # 150 cm radius
+        self.pilot.vehicle.parameters['CIRCLE_RATE'] = 45       # +15 deg/s CW
         self.pilot.vehicle.mode = VehicleMode('CIRCLE')
 
         time_start = time.time()
-        timeout = 1     # 1 second to switch modes
+        timeout = 2    # 1 second to switch modes
         while not(self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
             time_elapsed = time.time() - time_start
             if (time_elapsed >= timeout):
                 break
             time.sleep(0.1)
 
-        # If switch to CIRCLE was successful, let the circle run in AUTO mode.
-        # Otherwise, revert back to stationary hold in GUIDED mode
-        if (self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
-            self.pilot.vehicle.mode = VehicleMode('AUTO')
-        else:
+        # If switch to CIRCLE was unsuccessful, revert back to stationary hold in GUIDED mode
+        if (self.pilot.vehicle.mode != VehicleMode('CIRCLE')):
             self.pilot.vehicle.mode = VehicleMode('GUIDED')
-        '''
+        
+        
+        # self.pilot.send_circle_command(3)
 
         # self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
         # self.pilot.vehicle.parameters['PLND_TYPE'] = 1
@@ -1099,7 +1120,7 @@ class Navigator(object):
                 print ('Target not found in %0.3f seconds' % timeout)
                 logging.info('\'find_target_and_land_drone\', Target not found in %d seconds' % time_elapsed)
                 break
-	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED')):
+	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED') or self.pilot.vehicle.mode == VehicleMode('AUTO')):
 		        self.landing_state = 10
 		        break
             time.sleep(0.5) # TODO Can adjust if different responsiveness is

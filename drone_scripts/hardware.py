@@ -37,7 +37,7 @@ class LandingCamera(threading.Thread):
             self._yfov = 48.8 * math.pi/180
             self._camera = PiCamera()
             self._camera.resolution = (self._width, self._height)
-            self._camera.framerate = 60
+            self._camera.framerate = 30
             self._camera.shutter_speed = 0
             self._camera.ISO = 0
             self._camera.meter_mode = 'matrix'
