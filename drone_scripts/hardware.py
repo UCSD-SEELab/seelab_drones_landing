@@ -124,12 +124,14 @@ class LandingCamera(threading.Thread):
            6	1280x720	16:9	 40 < fps <= 90	    x	 	Partial	2x2
            7	640x480	    4:3	     40 < fps <= 90	    x	 	Partial	2x2
         '''
+        if (self._width == width and self._height == height):
+            return
         self._width = width
         self._height = height
         self._xfov = 62.2 * math.pi/180
         self._yfov = 48.8 * math.pi/180
         self._camera.resolution = (self._width, self._height)
-
+        
 
     def stop(self):
         self._stop_event.set()

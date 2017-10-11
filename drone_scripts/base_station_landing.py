@@ -30,7 +30,11 @@ import json
 import time
 from MissionGenerator import MissionGenerator
 from collections import deque
-import gdp_access
+
+DEBUG = True
+    
+if not(DEBUG):
+    import gdp_access
 
 
 class DroneCoordinator(threading.Thread):
@@ -69,7 +73,9 @@ class DroneCoordinator(threading.Thread):
             if ((self.gdp_service != None) and self.gdp_service.isAlive()):
                 b_trigger, list_signposts = self.gdp_service.check_trigger()
                 if (b_trigger):
-                    list_signpost_anomalies = list(set(list_signpost_anomalies.extend(list_signposts)))
+                    #print(list_signposts)
+                    # TODO Remove duplicates in list
+                    list_signpost_anomalies.extend(list_signposts)
             
             if (len(list_signpost_anomalies) > 0):
                 for signpost_target in list_signpost_anomalies:
@@ -83,8 +89,9 @@ class DroneCoordinator(threading.Thread):
                 list_signpost_anomalies = []
                 print('All anomaly data collected. Go to home at %s' % (gps_home))
                 
+                # TODO Clear anomaly flag (signpost['signpost'].f_anomaly)
                 
-            time.sleep(0.1)
+            time.sleep(1)
     
     def stop(self):
         self._stop_event.set()
@@ -342,7 +349,7 @@ class DroneCoordinator(threading.Thread):
                 'target_loc_lo': {
                     'N': 0,
                     'E': 0,
-                    'D': 7,
+                    'D': 10,
                 },
                 'start_loc_hi': {
                     'N': 0,
@@ -434,7 +441,7 @@ def run_test():
     mission_to = dc.create_find_target_and_land_mission(gps=gps_signpost, b_download=False)
     mission_back = dc.create_find_target_and_land_mission(gps=gps_home, b_download=False)
     
-    for t in xrange(5,0,-1):
+    for t in xrange(3,0,-1):
         print(t)
         time.sleep(1)   
     
@@ -446,29 +453,29 @@ if __name__ == '__main__':
     #parser.add_argument('primary_ip')
     #args = parser.parse_args()
 
-    DEBUG = False
+    #DEBUG = False
     
     if not(DEBUG):
         # Initialize Pretty Printer for an eye-pleasing interface
         pp = pprint.PrettyPrinter(indent=4)
         
         # Initialize GDP interface
-        list_addr_base = [#'edu.berkeley.eecs.c098e5120003']#,
-                          #'edu.berkeley.eecs.c098e5120011',
+        list_addr_base = ['edu.berkeley.eecs.c098e5120003',
+                          'edu.berkeley.eecs.c098e5120011',
                           'edu.berkeley.eecs.c098e512000a']
                           #'edu.berkeley.eecs.c098e5120010']                  
         list_addr_sensors = ['signpost_gps.v0-0-1',
-                             'signpost_energy.v0-0-1',
-                             'signpost_radio.v0-0-1',
+                             #'signpost_energy.v0-0-1',
+                             #'signpost_radio.v0-0-1',
                              #'signpost_audio_frequency.v0-0-1',
                              'anomalies.v0-0-1']                       
                              #'signpost_microwave_radar.v0-0-1',
                              #'signpost_ambient.v0-0-1',
                              #'signpost_ucsd_air_quality.v0-0-1']
         list_id_sensors = ['signpost_gps',
-                           'signpost_energy',
-                           'signpost_radio',
-                           'signpost_audio_frequency',
+                           #'signpost_energy',
+                           #'signpost_radio',
+                           #'signpost_audio_frequency',
                            'anomalies']
                            #'signpost_microwave_radar',
                            #'signpost_ambient',
@@ -491,7 +498,7 @@ if __name__ == '__main__':
     #dc.launch_drone(dc.primary_drone_addr)
     
     #interact(local=locals())
-    time.sleep(120)
+    time.sleep(600)
     
     if not(DEBUG):
         gdp_processor.stop()

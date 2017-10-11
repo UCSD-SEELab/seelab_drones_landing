@@ -18,9 +18,11 @@ class Signpost(object):
        generates alerts when a Signpost '''
     def __init__(self, name):
         print('Signpost: Initializing signpost %s' % (name))
+        self.pp = pprint.PrettyPrinter(indent=4)
         self.name = name
         self.mac_addr = None
         self.loc = None
+        self.f_anomaly = 0
         self.last_ts = None
         self.audio = {'ts':None, 
                       'recno':None}
@@ -115,7 +117,7 @@ class Signpost(object):
             self.audio[key] = val
             
         if (DEBUG_PRINT):
-            pp.pprint(self.audio)
+            self.pp.pprint(self.audio)
         print('Signpost._process_audio_freq:   Finished!')
         
         
@@ -153,12 +155,13 @@ class Signpost(object):
         
         if (gps_lat and gps_lon):
             self.loc = [gps_lat, gps_lon]
+            print('Signpost._process_gps: Loc is %s!' % (self.loc)) 
             
         for key, val in msg.iteritems(): 
             self.gps[key] = val
             
         if (DEBUG_PRINT):
-            pp.pprint(self.gps)
+            self.pp.pprint(self.gps)
         print('Signpost._process_gps:   Finished!')
         
         
@@ -185,7 +188,7 @@ class Signpost(object):
             self.energy[key] = val
         
         if (DEBUG_PRINT):
-            pp.pprint(self.energy)
+            self.pp.pprint(self.energy)
         print('Signpost._process_energy:   Finished!')
         
         
@@ -212,7 +215,7 @@ class Signpost(object):
             self.radio[key] = val
         
         if (DEBUG_PRINT):
-            pp.pprint(self.radio)
+            self.pp.pprint(self.radio)
         print('Signpost._process_radio:   Finished!')
         
         
@@ -239,7 +242,7 @@ class Signpost(object):
             self.microwave_radar[key] = val
 
         if (DEBUG_PRINT):
-            pp.pprint(self.microwave_radar)
+            self.pp.pprint(self.microwave_radar)
         print('Signpost._process_microwave_radar:   Finished!')
         
         
@@ -266,7 +269,7 @@ class Signpost(object):
             self.ambient[key] = val
                 
         if (DEBUG_PRINT):
-            pp.pprint(self.ambient)
+            self.pp.pprint(self.ambient)
         print('Signpost._process_ambient:   Finished!')
         
         
@@ -293,7 +296,7 @@ class Signpost(object):
             self.air_quality[key] = val
 
         if (DEBUG_PRINT):
-            pp.pprint(self.air_quality)
+            self.pp.pprint(self.air_quality)
         print('Signpost._process_ucsd_air_quality:   Finished!')
         
 
@@ -317,8 +320,13 @@ class Signpost(object):
         for key, val in msg.iteritems(): 
             self.anomalies[key] = val
 
+        if ('anomaly' in msg):
+            if (msg['anomaly']['value'] == 1):
+                self.f_anomaly = 1
+                print('Signpost._process_anomalies: f_anomaly is %d!' % (self.f_anomaly)) 
+
         if (DEBUG_PRINT):
-            pp.pprint(self.anomalies)
+            self.pp.pprint(self.anomalies)
         print('Signpost._process_anomalies:   Finished!')
 
 
@@ -432,12 +440,14 @@ class GDPDataProcessor(threading.Thread):
     def check_trigger(self):
         list_signpost_anomalies = []
         for signpost in self.list_addr_dict:
-            if (signpost['signpost'].anomalies['anomaly']['value'] == 1):
-                list_signpost_anomalies.append(
-                        {'id_signpost': signpost['id_signpost'], 
-                         'gps': self.get_gps(signpost['id_signpost'])
-                        }
-                )
+            if ((signpost['signpost'].f_anomaly == 1) and (signpost['signpost'].loc != None)):
+                #print(signpost)
+                if not(signpost['id_signpost'] in [signpost_anomalies['id_signpost'] for signpost_anomalies in list_signpost_anomalies]):
+                    list_signpost_anomalies.append(
+                            {'id_signpost': signpost['id_signpost'], 
+                             'gps': self.get_gps(signpost['id_signpost'])
+                            }
+                    )
                 
         if (len(list_signpost_anomalies) > 0):
             return (True, list_signpost_anomalies)

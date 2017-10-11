@@ -1167,8 +1167,8 @@ class Navigator(object):
 
 
     def landing_adjustment_cb(self, arg1=None):
-        landing_dist_low = 1.5
-        landing_dist_med = 3.0
+        landing_dist_low = 2.0
+        landing_dist_med = 5.0
 
         if (self.pilot.vehicle.armed == False):
             self.landing_state = 5
@@ -1180,10 +1180,13 @@ class Navigator(object):
                 self.target_found = True
                 if arg1['distance'] <= landing_dist_low:
                     self.landing_state = 4
+                    self.hw_landing_cam.set_resolution(640,480)
                 elif arg1['distance'] <= landing_dist_med:
                     self.landing_state = 3
+                    self.hw_landing_cam.set_resolution(640,480)
                 elif arg1['distance'] > landing_dist_med:
                     self.landing_state = 2
+                    self.hw_landing_cam.set_resolution(1648, 1232)
                 else:
                     self.landing_state = 9
                 print ("Landing message sent and landing state adjusted to: "+\
