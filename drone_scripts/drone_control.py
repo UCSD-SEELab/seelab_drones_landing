@@ -600,7 +600,7 @@ class Pilot(object):
         '''
         if (speed):
             self.vehicle.parameters['WPNAV_SPEED'] = speed
-            
+
         if self.vehicle.mode != 'GUIDED':
             print 'Vehicle {0} aborted goto_waypoint due to mode switch to {1}'.format(self.instance, self.vehicle.mode.name)
             return False
@@ -616,7 +616,7 @@ class Pilot(object):
             else:
                 good_count = 0
             time.sleep(0.2)
-            
+
         if (self.cancel_task):
             print 'goto_waypoint cancelled.'
             self.cancel_task = False
@@ -683,21 +683,26 @@ class Pilot(object):
     #     self.vehicle.send_mavlink(message)
     #     self.vehicle.flush()
 
-    def send_circle_command(self, dist=3):
-        n_turns = 3
-        message = self.vehicle.message_factory.mav_cmd_nav_loiter_turns_encode(
-            3,      # Number of turns
-            0,      # Empty (unused)
-            dist,      # Radius (m)
-            0,      # Desired yaw angle (unused)
-            0,      # Target latitude. If 0, vehicle will use current lat
-            0,      # Target longitude. If 0, vehicle will use current lon
-            0       # Target altitude. If 0, vehicle will use current alt
-        )
-        logging.info('\'send_circle_command\', \'n_turns\': %d at %0.1f m' % (n_turns, dist))
-        self.vehicle.send_mavlink(message)
-        self.vehicle.flush()
+    def send_circle_command(self, dist=1.5, n_turns=3):
 
+        # NOTE: new way to encode
+        # msg = self.vehicle.message_factory.command_long_encode(
+        #     0, 0,    # target_system, target_component
+        #     mavutil.mavlink.MAV_CMD_NAV_LOITER_TURNS, #command
+        #     0, #confirmation
+        #     n_turns,    # param 1 number of 360 deg turnsa
+        #     0,          # param 2 not used
+        #     dist,          # param 3 radius, NOTE: apparently not supported
+        #     0, # param 4 not used
+        #     0, 0, 0)    # param 5 ~ 7 current Lat, Lon, Alt
+        # logging.info('\'send_circle_command\', \'n_turns\': %d at %0.1f m' % (n_turns, dist))
+        # self.vehicle.send_mavlink(msg)
+        # self.vehicle.flush()
+
+        self.vehicle.parameters['CIRCLE_RADIUS'] = 150    # 150 cm radius
+        self.vehicle.parameters['CIRCLE_RATE'] = 45       # +45 deg/s CW
+        self.vehicle.mode = VehicleMode('CIRCLE')         # circles with nose facing pointed to a point set ahead
+        self.vehicle.flush()
 
     def get_proc_id(self, b_only_pid=False):
         ''' Gets the class name and process id of the thread '''
@@ -748,8 +753,8 @@ class Navigator(object):
             return os.getpid()
         else:
             return {'name':self.__class__.__name__, 'pid':os.getpid()}
-            
-            
+
+
     def load_launch_mission(self):
         '''Load a mission for launching the drone.'''
         with open('launch_mission.json', 'r') as fp:
@@ -791,25 +796,25 @@ class Navigator(object):
 
             except KeyboardInterrupt:
                 self.pilot.RTL_and_land()
-                break  
+                break
 
 
     def add_mission_top(self, mission_unparsed):
-        '''Parse mission and extract sequence of tasks. Then, add to top of 
+        '''Parse mission and extract sequence of tasks. Then, add to top of
         queue.
-        e.g. Current list_tasks = [1,2,3]  
+        e.g. Current list_tasks = [1,2,3]
              Incoming task = [4,5,6]
              Resulting list_tasks = [4,5,6,1,2,3]'''
         list_tasks = self.parse_mission(mission_unparsed)
         for task in reversed(list_tasks):
             self.task_queue.appendleft(task)
         print ('add_mission_top: task_queue is %d long' % len(self.task_queue))
-    
-    
+
+
     def add_mission(self, mission_unparsed):
-        '''Parse mission and extract sequence of tasks. Then, add to back of 
+        '''Parse mission and extract sequence of tasks. Then, add to back of
         queue.
-        e.g. Current list_tasks = [1,2,3]  
+        e.g. Current list_tasks = [1,2,3]
              Incoming task = [4,5,6]
              Resulting list_tasks = [1,2,3,4,5,6]'''
         list_tasks = self.parse_mission(mission_unparsed)
@@ -820,7 +825,7 @@ class Navigator(object):
     def parse_mission(self, mission_dict):
         '''Add GPS coordinates to all the points in a mission dictionary.'''
         list_tasks = []
-        
+
         if (self.pilot.vehicle.home_location == None):
             cmds = self.pilot.vehicle.commands
             cmds.download()
@@ -829,7 +834,7 @@ class Navigator(object):
         #if mission_dict['plan'][0]['action'] == 'launch':
         #    list_tasks.append(mission_dict['plan'][0])
         #    return list_tasks
-        
+
         # Convert all points to full GPS points
         for name, POI in mission_dict['points'].iteritems():
             if (all(keys in POI for keys in ['N', 'E', 'D'])):
@@ -838,8 +843,8 @@ class Navigator(object):
                 POI['GPS'] = LocationGlobalRelative(POI['lat'], POI['lon'],
                                                     POI['alt'])
             else:
-                print ('ERROR: invalid POI format in mission file %s: %s' % (name, POI))        
-        
+                print ('ERROR: invalid POI format in mission file %s: %s' % (name, POI))
+
         # Convert all points to a series of GPS coordinate instructions
         for task in mission_dict['plan']:
             list_GPS = []
@@ -848,14 +853,14 @@ class Navigator(object):
                     if (point in mission_dict['points']):
                         list_GPS.append(mission_dict['points'][point]['GPS'])
                     else:
-                        print ('ERROR: plan point %s not in mission points' % (point))  
+                        print ('ERROR: plan point %s not in mission points' % (point))
                         list_tasks = []
                         break
                 task['path'] = list_GPS
             list_tasks.append(task)
-            
+
         return list_tasks
-        
+
 
     def meters_to_waypoint(self, POI):
         '''Construct a GPS location from a NED point.
@@ -881,20 +886,20 @@ class Navigator(object):
         pub.subscribe(self.land_cb, 'flask-messages.land')
         pub.subscribe(self.RTL_cb, 'flask-messages.RTL')
         pub.subscribe(self.find_target_and_land_cb, 'flask-messages.find_target_and_land')
-        
-        
+
+
     ### CALLBACKS FOR NAVIGATOR ###
     def detour_cb(self, arg1=None):
-        '''Pushes current task back onto top of queue and adds provided mission 
-        in its place. After provided mission is accomplished, returns to 
+        '''Pushes current task back onto top of queue and adds provided mission
+        in its place. After provided mission is accomplished, returns to
         previous task.'''
         if not(self.task_current == None):
             self.task_queue.appendleft(self.task_current)
         mission_dict = arg1
         self.add_mission_top(mission_dict)
         self.pilot.cancel_task = True
-    
-    
+
+
     def mission_cb(self, arg1=None):
         '''Add an incoming mission to the mission queue.'''
         print 'Navigator entered mission_cb'
@@ -942,9 +947,9 @@ class Navigator(object):
         print 'Navigator entered RTL callback'
         self.pilot.return_to_launch()
         self.pilot.land_drone()
-        
+
     ### CALLBACKS FOR NAVIGATOR END ###
-        
+
     def execute_task(self, task):
         '''Execute a task and send logging data to the logger.
 
@@ -1041,8 +1046,8 @@ class Navigator(object):
     def stop(self):
         '''Shut down the pilot/vehicle.'''
         self.pilot.stop()
-        
-    
+
+
     def find_target_and_land_drone(self, event):
         ''' Searches for a target and then attempts to land on the target. '''
 
@@ -1074,28 +1079,23 @@ class Navigator(object):
 
 
         print 'Start search for target'
-        
-        
+
+
         # TODO Add movement during initial search
         # Michael: I think this will work. We can test when we need.
-        self.pilot.vehicle.parameters['CIRCLE_RADIUS'] = 150    # 150 cm radius
-        self.pilot.vehicle.parameters['CIRCLE_RATE'] = 45       # +15 deg/s CW
-        self.pilot.vehicle.mode = VehicleMode('CIRCLE')
 
-        time_start = time.time()
-        timeout = 2    # 1 second to switch modes
-        while not(self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
-            time_elapsed = time.time() - time_start
-            if (time_elapsed >= timeout):
-                break
-            time.sleep(0.1)
+        # time_start = time.time()
+        # timeout = 2    # 1 second to switch modes
+        # while not(self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
+        #     time_elapsed = time.time() - time_start
+        #     if (time_elapsed >= timeout):
+        #         break
+        #     time.sleep(0.1)
 
         # If switch to CIRCLE was unsuccessful, revert back to stationary hold in GUIDED mode
-        if (self.pilot.vehicle.mode != VehicleMode('CIRCLE')):
-            self.pilot.vehicle.mode = VehicleMode('GUIDED')
-        
-        
-        # self.pilot.send_circle_command(3)
+        # if not (self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
+        #     print("Unsuccessful switch to CIRCLE mode")
+        #     self.pilot.vehicle.mode = VehicleMode('GUIDED')
 
         # self.pilot.vehicle.parameters['PLND_ENABLED'] = 1
         # self.pilot.vehicle.parameters['PLND_TYPE'] = 1
@@ -1104,27 +1104,39 @@ class Navigator(object):
         logging.info('\'find_target_and_land_drone\', PLND_ENABLED is ' + str(self.pilot.vehicle.parameters['PLND_ENABLED']))
 
         time_start = time.time()
-        timeout = 30    # 30 seconds
-        time_switch = 5
+        timeout = 15
+        # time_switch = 5
         while(1):
             if (self.target_found == True):
                 self.pilot.vehicle.mode = VehicleMode('LAND')
                 self.pilot.vehicle.flush()
-                
+
                 print 'Found target, start landing'
                 logging.info('\'find_target_and_land_drone\', Found target and start landing')
                 break
+
             time_elapsed = time.time() - time_start
-            if (time_elapsed >= timeout):
+
+            if (time_elapsed >= timeout and self.pilot.vehicle.mode == VehicleMode('GUIDED')):
+                # default 3 turns with 1.5 m radius
+                self.pilot.send_circle_command()
+                print 'Target not found, begin circling'
+                logging.info('\'find_target_and_land_drone\', Target not found in %d seconds, begin circle' % time_elapsed)
+                time_start = time.time()
+
+            if (time_elapsed >= timeout and self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
                 self.landing_state = 9  # 9: Abort
                 print ('Target not found in %0.3f seconds' % timeout)
-                logging.info('\'find_target_and_land_drone\', Target not found in %d seconds' % time_elapsed)
+                logging.info('\'find_target_and_land_drone\', Target not found in %d seconds in circle mode' % time_elapsed)
                 break
-	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED') or self.pilot.vehicle.mode == VehicleMode('AUTO')):
+
+	        if not (self.pilot.vehicle.mode == VehicleMode('GUIDED') or self.pilot.vehicle.mode == VehicleMode('CIRCLE')):
 		        self.landing_state = 10
 		        break
-            time.sleep(0.5) # TODO Can adjust if different responsiveness is
+
+            time.sleep(0.1) # TODO Can adjust if different responsiveness is
                             # required
+                            # changed 0.5 -> 0.1
 
         time_start = time.time()
         timeout = 10     # timeout of 5 seconds
